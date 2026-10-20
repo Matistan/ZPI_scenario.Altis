@@ -52,11 +52,12 @@ ZPI_fnc_buildingsNear = {
 };
 
 // ---- buildings a squad can enter ----------------------------------------------------------
-// [center, min. positions inside, pair?, radius] -> [building] or [b1, b2] or [] (nothing found)
-// Only buildings with at most ZPI_cfg_maxBuildings labelled buildings within 70 m (itself
-// included), greenest surroundings first, nearer to the center preferred.
+// [center, min. positions inside, pair?, radius, max. buildings around, "around" radius]
+//   -> [building] or [b1, b2] or [] (nothing found)
+// Only buildings with at most _maxNear labelled buildings within _nearR m (itself included),
+// greenest surroundings first, nearer to the center preferred. Lone building: _maxNear 1.
 ZPI_fnc_findEntryBuildings = {
-    params ["_c", ["_need", 2], ["_pair", false], ["_radius", 600]];
+    params ["_c", ["_need", 2], ["_pair", false], ["_radius", 600], ["_maxNear", ZPI_cfg_maxBuildings], ["_nearR", 70]];
     private _all = (nearestObjects [[_c select 0, _c select 1], ["House", "Building"], _radius]) select {
         damage _x < 0.5 && {(count (_x buildingPos -1)) >= _need} && {[_x] call ZPI_fnc_isLabelBuilding}
     };
@@ -66,8 +67,8 @@ ZPI_fnc_findEntryBuildings = {
         private _b = _x;
         private _p = getPosATL _b; _p set [2, 0];
         if (!_pair) then {
-            private _near = count ([_p, 70] call ZPI_fnc_buildingsNear);
-            if (_near <= ZPI_cfg_maxBuildings) then {
+            private _near = count ([_p, _nearR] call ZPI_fnc_buildingsNear);
+            if (_near <= _maxNear) then {
                 _scored pushBack [([_p, 60] call ZPI_fnc_greenScore) - 0.12 * _near - (_c distance2D _p) / (_radius * 4), _forEachIndex, [_b]];
             };
         } else {
@@ -76,8 +77,8 @@ ZPI_fnc_findEntryBuildings = {
                 private _m = _x;
                 private _mid = ((getPosATL _b) vectorAdd (getPosATL _m)) vectorMultiply 0.5;
                 _mid set [2, 0];
-                private _cl = count ([_mid, 70] call ZPI_fnc_buildingsNear);
-                if (_cl <= ZPI_cfg_maxBuildings) exitWith {
+                private _cl = count ([_mid, _nearR] call ZPI_fnc_buildingsNear);
+                if (_cl <= _maxNear) exitWith {
                     _scored pushBack [([_mid, 60] call ZPI_fnc_greenScore) - 0.12 * _cl - (_c distance2D _mid) / (_radius * 4), _i, [_b, _m]];
                 };
             } forEach (_all select { _x != _b && {(_x distance2D _b) > 10} && {(_x distance2D _b) < 45} });
@@ -152,9 +153,13 @@ ZPI_fnc_tourSite = {
     private _green = -1;
     private _what = "";
     switch (true) do {
-        case (_scene in [7, 10, 13, 14, 15, 16]): {
+        case (_scene in [7, 10, 13, 14, 15, 16, 22]): {
             private _need = switch (_scene) do { case 7: { 0 }; case 10: { 4 }; case 15: { 2 }; default { 3 } };
-            private _b = [_anchor, _need, _scene == 15, _R] call ZPI_fnc_findEntryBuildings;
+            private _b = if (_scene == 22) then {
+                [_anchor, _need, false, _R, 1, ZPI_cfg_loneRadius] call ZPI_fnc_findEntryBuildings
+            } else {
+                [_anchor, _need, _scene == 15, _R] call ZPI_fnc_findEntryBuildings
+            };
             if (_b isNotEqualTo []) then {
                 _site = [0, 0, 0];
                 { _site = _site vectorAdd (getPosATL _x) } forEach _b;
@@ -163,8 +168,8 @@ ZPI_fnc_tourSite = {
                 _what = (_b apply { typeOf _x }) joinString "+";
             };
         };
-        case (_scene in [1, 2, 4, 9, 11]): {
-            private _r = [_anchor, _R, [0, 6] select (_scene in [4, 11])] call ZPI_fnc_siteRoad;
+        case (_scene in [1, 2, 4, 9, 11, 19, 21]): {
+            private _r = [_anchor, _R, switch (true) do { case (_scene == 19): { 8 }; case (_scene in [4, 11, 21]): { 6 }; default { 0 } }] call ZPI_fnc_siteRoad;
             if (_r isNotEqualTo []) then { (selectRandom _r) params ["_g", "_p"]; _site = _p; _what = "road" };
         };
         default {

@@ -17,7 +17,7 @@ ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br
     + "B barrage where you look<br/>"
     + "I auto-shot on explosions on/off<br/>"
     + "Z orthophoto of the scene area<br/>"
-    + "Home dataset generator: 1000 images by itself (Home stops)<br/>"
+    + "Home dataset generator: makes ZPI_cfg_tourTarget images by itself (Home stops)<br/>"
     + "End exposure test (then run tools/pick_exposure.py)<br/><br/>"
     + "<t color='#ffd27a'>SCENES</t>  1-9, 0<br/>"
     + "1 checkpoint &#160; 2 column &#160; 3 dug-in<br/>"
@@ -27,6 +27,9 @@ ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br
     + "Shift+1 fireteam into a house &#160; Shift+2 dismount + entry<br/>"
     + "Shift+3 two buildings &#160; Shift+4 single file entry<br/>"
     + "Shift+5 tank column across fields &#160; Shift+6 tanks firing (then K)<br/>"
+    + "Shift+7 long armour column &#160; Shift+8 patrol across fields<br/>"
+    + "Shift+9 patrol on a road &#160; Shift+0 lone building entry<br/>"
+    + "Shift+- groups kneeling / prone<br/>"
     + "N new layout &#160; X clear &#160; L next location<br/>"
     + "C scene to where you look &#160; J camera to scene<br/>"
     + "Alt+click on map: move scene there<br/><br/>"
@@ -79,8 +82,10 @@ ZPI_fnc_onKey = {
         };
         true
     };
-    // Shift+1 ... Shift+6: building fireteam, dismount, two buildings, single file, tank column across fields, tanks firing
-    if (_shift && {_key in [2, 3, 4, 5, 6, 7]}) exitWith { [_key + 11] call ZPI_fnc_runScene; true };
+    // Shift+1 ... Shift+0: building fireteam, dismount, two buildings, single file, tank column across fields,
+    // tanks firing, long armour column, patrol across fields, patrol on a road, lone building; Shift+- groups down
+    if (_shift && {_key in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]}) exitWith { [_key + 11] call ZPI_fnc_runScene; true };
+    if (_shift && {_key == 12}) exitWith { [23] call ZPI_fnc_runScene; true };
     private _handled = true;
     switch (_key) do {
         case 2:  { [1] call ZPI_fnc_runScene };

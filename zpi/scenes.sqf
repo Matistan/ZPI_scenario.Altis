@@ -689,7 +689,141 @@ ZPI_fnc_scene_tankFiring = {
     };
 };
 
-// index = number key (10 = minus, 11 = [, 12 = ], 13-18 = Shift+1 ... Shift+6)
+// ---------------------------------------------------------------------
+// Shift+7 - long armour column: 7 tanks / tracked APCs close together on a country road
+// ---------------------------------------------------------------------
+ZPI_fnc_scene_longColumn = { params ["_c"]; [_c, ["T", "T", "T", "T", "T", "T", "T"], 26] call ZPI_fnc_convoyOf };
+
+// ---------------------------------------------------------------------
+// Shift+8 - patrol across the fields: a squad of 8 in a line, wedge or staggered column,
+//           walking a long loop over open ground (weapons up)
+// ---------------------------------------------------------------------
+ZPI_fnc_scene_patrolField = {
+    params ["_c"];
+    private _p = [_c, 350] call ZPI_fnc_findOpen;
+    private _h = [360] call ZPI_fnc_rand;
+    private _form = [["LINE", "WEDGE", "STAG COLUMN", "ECH LEFT"]] call ZPI_fnc_pick;
+    private _n = 6 + ([3] call ZPI_fnc_randInt);
+    private _g = [ZPI_side] call ZPI_fnc_newGroup;
+    for "_j" from 0 to (_n - 1) do {
+        [_g, [_p, _h, (_j - _n / 2) * 4, -2 * (_j mod 2)] call ZPI_fnc_rel, _h, "UP", false] call ZPI_fnc_spawnSoldier;
+    };
+    _g setFormation _form;
+    _g setBehaviour "AWARE";
+    _g setSpeedMode "LIMITED";
+    _g setCombatMode "BLUE";
+    [_g, [[_p, _h, 0, 350] call ZPI_fnc_rel, [_p, _h, 120, 350] call ZPI_fnc_rel, [_p, _h, 120, 0] call ZPI_fnc_rel, _p], true] call ZPI_fnc_addWaypoints;
+    ["patrol", format ['{"kind":"field","formation":"%1","soldiers":%2,"heading":%3}', _form, _n, _h toFixed 0]] call ZPI_fnc_event;
+};
+
+// ---------------------------------------------------------------------
+// Shift+9 - patrol along a country road: a squad of 8 in a file / staggered column
+// ---------------------------------------------------------------------
+ZPI_fnc_scene_patrolRoad = {
+    params ["_c"];
+    private _road = [_c, 500] call ZPI_fnc_findRoad;
+    if (isNull _road) exitWith { [_c] call ZPI_fnc_scene_patrolField };
+    private _path = [_road, 12, 35, false] call ZPI_fnc_roadPath;
+    // turn back before a village
+    private _cut = _path findIf { (count ([_x select 0, 60] call ZPI_fnc_buildingsNear)) > 1 };
+    if (_cut >= 0) then { _path = _path select [0, _cut max 4] };
+    (_path select 0) params ["_p", "_h"];
+    private _form = [["FILE", "STAG COLUMN", "STAG COLUMN"]] call ZPI_fnc_pick;
+    private _g = [ZPI_side] call ZPI_fnc_newGroup;
+    for "_j" from 0 to 7 do {
+        [_g, [_p, _h, [-1.5, 1.5] select (_j mod 2), -4 * _j] call ZPI_fnc_rel, _h, "UP", false] call ZPI_fnc_spawnSoldier;
+    };
+    _g setFormation _form;
+    _g setBehaviour "AWARE";
+    _g setSpeedMode "LIMITED";
+    _g setCombatMode "BLUE";
+    [_g, [(_path select (count _path - 1)) select 0, _p], true] call ZPI_fnc_addWaypoints;
+    ["patrol", format ['{"kind":"road","formation":"%1","soldiers":8,"road_points":%2}', _form, count _path]] call ZPI_fnc_event;
+};
+
+// ---------------------------------------------------------------------
+// Shift+0 - squad of 8 enters a LONE building (no other building within ZPI_cfg_loneRadius);
+//           4 go in, 4 wait outside. Pictures show at most ZPI_cfg_loneMaxBuildings building.
+// ---------------------------------------------------------------------
+ZPI_fnc_scene_lone = {
+    params ["_c"];
+    private _b = [_c, 3, false, 400, 1, ZPI_cfg_loneRadius] call ZPI_fnc_findEntryBuildings;
+    if (_b isEqualTo []) exitWith { ["No lone enterable building (nothing else within " + str ZPI_cfg_loneRadius + " m) near here: move the scene (C or Alt+click on the map)"] call ZPI_fnc_msg };
+    private _file = ([1] call ZPI_fnc_rand) < 0.35;
+    [[[_b select 0, ZPI_cfg_buildingEnter]], ZPI_cfg_buildingSquad,
+        createHashMapFromArray [["approach", ([[25, 50], [50, 65]] select _file) call ZPI_fnc_randRange],
+            ["formation", ["tight", "file"] select _file], ["speed", ["NORMAL", "LIMITED"] select _file]]] call ZPI_fnc_entryScene;
+};
+
+// ---------------------------------------------------------------------
+// Shift+- - groups down: soldiers kneeling or lying in a group on open ground
+//           (a halted patrol in all-round defence, a firing line, a wedge going to ground).
+//           Two groups 35-55 m apart, each one of the layouts below; nobody walks.
+// ---------------------------------------------------------------------
+ZPI_fnc_downGroup = {               // [posATL, heading, layout] -> soldiers
+    params ["_p", "_h", "_kind"];
+    private _g = [ZPI_side] call ZPI_fnc_newGroup;
+    private _out = [];
+    private _spawn = {
+        params ["_right", "_fwd", "_dir", "_st"];
+        private _u = [_g, [_p, _h, _right + ([-0.3, 0.3] call ZPI_fnc_randRange), _fwd + ([-0.3, 0.3] call ZPI_fnc_randRange)] call ZPI_fnc_rel,
+            _dir + ([-12, 12] call ZPI_fnc_randRange), _st, true] call ZPI_fnc_spawnSoldier;
+        _out pushBack _u;
+    };
+    switch (_kind) do {
+        case "prone_line": {            // firing line, everybody prone
+            private _n = 6 + ([3] call ZPI_fnc_randInt);
+            for "_j" from 0 to (_n - 1) do { [(_j - (_n - 1) / 2) * 2.2, 0, _h, "DOWN"] call _spawn };
+        };
+        case "kneel_line": {            // kneeling line, a few prone
+            private _n = 5 + ([3] call ZPI_fnc_randInt);
+            for "_j" from 0 to (_n - 1) do { [(_j - (_n - 1) / 2) * 2.5, 0, _h, [["MIDDLE", "MIDDLE", "MIDDLE", "DOWN"]] call ZPI_fnc_pick] call _spawn };
+        };
+        case "circle": {                // halted patrol, all-round defence, kneeling facing out
+            private _n = 6 + ([3] call ZPI_fnc_randInt);
+            private _r = [3, 4.5] call ZPI_fnc_randRange;
+            for "_j" from 0 to (_n - 1) do {
+                private _a = _j * 360 / _n;
+                [_r * (sin _a), _r * (cos _a), _h + _a, [["MIDDLE", "MIDDLE", "DOWN"]] call ZPI_fnc_pick] call _spawn;
+            };
+        };
+        case "wedge": {                 // wedge gone to ground: front prone, rear kneeling
+            private _n = 6 + ([3] call ZPI_fnc_randInt);
+            [0, 0, _h, "DOWN"] call _spawn;
+            for "_j" from 1 to (_n - 1) do {
+                private _row = ceil (_j / 2);
+                [([-1, 1] select (_j mod 2)) * _row * 2.4, -_row * 2.4, _h, ["DOWN", "MIDDLE"] select (_row > 1)] call _spawn;
+            };
+        };
+        default {                       // "cluster": tight group kneeling around a leader, a few prone
+            private _n = 5 + ([4] call ZPI_fnc_randInt);
+            [0, 0, _h, "MIDDLE"] call _spawn;
+            for "_j" from 1 to (_n - 1) do {
+                private _a = [360] call ZPI_fnc_rand;
+                private _d = [1.5, 4] call ZPI_fnc_randRange;
+                [_d * (sin _a), _d * (cos _a), _h + ([-60, 60] call ZPI_fnc_randRange), [["MIDDLE", "MIDDLE", "DOWN"]] call ZPI_fnc_pick] call _spawn;
+            };
+        };
+    };
+    _out
+};
+
+ZPI_fnc_scene_groupsDown = {
+    params ["_c"];
+    private _p = [_c, 350] call ZPI_fnc_findOpen;
+    private _h = [360] call ZPI_fnc_rand;
+    private _kinds = ["prone_line", "kneel_line", "circle", "wedge", "cluster"];
+    private _k1 = [_kinds] call ZPI_fnc_pick;
+    private _k2 = [_kinds - [_k1]] call ZPI_fnc_pick;
+    private _a = [_p, _h, _k1] call ZPI_fnc_downGroup;
+    private _p2 = [_p, _h, ([-1, 1] select (([1] call ZPI_fnc_rand) < 0.5)) * ([35, 55] call ZPI_fnc_randRange), [-15, 15] call ZPI_fnc_randRange] call ZPI_fnc_rel;
+    private _b = [_p2, _h + ([-40, 40] call ZPI_fnc_randRange), _k2] call ZPI_fnc_downGroup;
+    ZPI_downGroups = [_a, _b];
+    ["groups_down", format ['{"layouts":["%1","%2"],"soldiers":[%3,%4]}', _k1, _k2, count _a, count _b]] call ZPI_fnc_event;
+};
+ZPI_downGroups = [];
+
+// index = number key (10 = minus, 11 = [, 12 = ], 13-22 = Shift+1 ... Shift+0, 23 = Shift+minus)
 ZPI_scenes = [
     ["mixed",             ZPI_fnc_scene_mixed],
     ["checkpoint",        ZPI_fnc_scene_checkpoint],
@@ -709,7 +843,12 @@ ZPI_scenes = [
     ["building_pair",     ZPI_fnc_scene_pair],
     ["building_file",     ZPI_fnc_scene_file],
     ["tank_column_field", ZPI_fnc_scene_fieldColumn],
-    ["tank_firing",       ZPI_fnc_scene_tankFiring]
+    ["tank_firing",       ZPI_fnc_scene_tankFiring],
+    ["tank_column_long",  ZPI_fnc_scene_longColumn],
+    ["patrol_field",      ZPI_fnc_scene_patrolField],
+    ["patrol_road",       ZPI_fnc_scene_patrolRoad],
+    ["building_lone",     ZPI_fnc_scene_lone],
+    ["groups_down",       ZPI_fnc_scene_groupsDown]
 ];
 
 ZPI_fnc_runScene = {

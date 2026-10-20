@@ -35,6 +35,7 @@ Usage (from the mission folder; output goes to <mission>\\output\\<--out>):
     python tools/make_yolo_dataset.py --watch              # keep running, add shots as you take them
     python tools/make_yolo_dataset.py --roboflow --jpg     # also write roboflow_partNN.zip for upload
     python tools/make_yolo_dataset.py --latest --max-buildings 3 --min-green 0.05   # newest session, clean + green only
+    python tools/make_yolo_dataset.py --out dataset_pose --pose   # + ground-point keypoint (YOLO-pose)
 
 Filters (pictures that are left out): more than --max-buildings labelled buildings (default 3),
 less green than --min-green (share of green pixels, default off). manifest.csv lists burst,
@@ -121,6 +122,13 @@ def _box_to_obj(b, gt_last: dict) -> dict | None:
              # ground point (feet / terrain under the hull centre / impact point) and where it is in the image
              "ground_pos_asl": [float(b[15]), float(b[16]), float(b[17])] if len(b) > 17 else None,
              "ground_norm": [float(b[18]), float(b[19])] if len(b) > 19 and b[18] is not None and b[19] is not None else None}
+        if kind == "s":
+            # field 21: how the mission made the soldier box; older versions: one projected 3D box (loose)
+            meth = b[20] if len(b) > 20 else ""
+            o["soldier_box"] = {"v": "body_parts", "h": "hit_point_parts"}.get(meth, "3d_box")
+            # field 22: the same soldier's one-3D-box label (pairs for correcting older pictures)
+            if len(b) > 21 and isinstance(b[21], list) and len(b[21]) == 4:
+                o["box_3d"] = [float(v) for v in b[21]]
         return o
     kind = OLD_CLASS_KIND.get(int(b[0]))  # old: [cls, cx, cy, w, h, id, vis, cut]
     if kind is None:
@@ -404,10 +412,115 @@ def out_name(rec: dict) -> str:
     return f'{rec["session"]}_{Path(rec["image"].replace(chr(92), "/")).stem}'
 
 
-def write_yaml(out: Path, classes: list[str]):
-    lines = [f"path: {out.resolve().as_posix()}", "train: images/train", "val: images/val", "test: images/test",
-             f"nc: {len(classes)}", "names:"] + [f"  {i}: {n}" for i, n in enumerate(classes)]
+KEYPOINT_TYPES = ("soldier", "tank", "military vehicle", "explosion")    # ground point is meaningful for these
+
+
+def keypoint_field(e: dict, W: int, H: int) -> str:
+    """--pose: one keypoint = the ground point (feet / terrain under the hull / impact point), YOLO-pose 'x y v'."""
+    g = e.get("ground_px")
+    if e["type"] in KEYPOINT_TYPES and g and 0 <= g[0] < W and 0 <= g[1] < H:
+        return f"{g[0] / W:.6f} {g[1] / H:.6f} 2"
+    return "0.000000 0.000000 0"
+
+
+def write_yaml(out: Path, classes: list[str], pose: bool = False):
+    lines = [f"path: {out.resolve().as_posix()}", "train: images/train", "val: images/val", "test: images/test"]
+    if pose:   # YOLO-pose: one keypoint per object (the ground point), no left/right pairs to swap when flipping
+        lines += ["kpt_shape: [1, 3]", "flip_idx: [0]"]
+    lines += [f"nc: {len(classes)}", "names:"] + [f"  {i}: {n}" for i, n in enumerate(classes)]
     (out / "data.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------- soldier boxes of older pictures
+# Before the fix, the mission labelled a soldier with ONE 3D box around his body projected into the
+# picture. Seen from above at an angle, that box's near-bottom corners land below the feet: the box
+# is loose at the bottom (10-40 % of its height) and a bit too wide. Pictures taken with the new
+# mission log both boxes for every soldier, so the tool learns how to turn the old box into the tight
+# one (per stance, depending on the camera pitch) and applies it to the soldiers of older pictures.
+
+CAL_MIN_PAIRS = 40
+
+
+def rec_pitch(rec: dict) -> float | None:
+    cam = rec.get("cam") or {}
+    if cam.get("pitch") is not None:
+        return float(cam["pitch"])
+    z = cam.get("z_axis")
+    if z:
+        return math.degrees(math.asin(max(-1.0, min(1.0, float(z[2])))))
+    return None
+
+
+def _stance_key(o: dict) -> str:
+    s = (o.get("stance_raw") or "").upper()
+    return s if s in ("STAND", "CROUCH", "PRONE") else "ANY"
+
+
+def _edges(cx, cy, w, h):
+    return cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
+
+
+def fit_box_calibration(records: list[dict]) -> dict:
+    """Learn tight-box edges from the old 3D box: per stance, each edge offset (in units of the old
+    box width / height) = a + b * |pitch|/90, least squares. -> {stance: {...}} (only with enough pairs)."""
+    import statistics
+    pairs: dict[str, list] = {}
+    for rec in records:
+        p = rec_pitch(rec)
+        if p is None:
+            continue
+        for o in rec["objects"]:
+            if o["kind"] != "s" or not o.get("box_3d") or o.get("soldier_box") == "3d_box" or o.get("inside_building"):
+                continue
+            ox0, oy0, ox1, oy1 = _edges(*o["box_3d"])
+            tx0, ty0, tx1, ty1 = _edges(o["cx"], o["cy"], o["w"], o["h"])
+            ow, oh = ox1 - ox0, oy1 - oy0
+            if ow <= 0 or oh <= 0 or ox0 < 0 or oy0 < 0 or ox1 > 1 or oy1 > 1:
+                continue                      # cut by the image edge: the boxes are not comparable
+            row = (abs(p) / 90.0, (tx0 - ox0) / ow, (ox1 - tx1) / ow, (ty0 - oy0) / oh, (oy1 - ty1) / oh)
+            pairs.setdefault(_stance_key(o), []).append(row)
+            pairs.setdefault("ANY", []).append(row)
+    cal = {}
+    for st, rows in pairs.items():
+        if len(rows) < CAL_MIN_PAIRS:
+            continue
+        xs = [r[0] for r in rows]
+        mx = sum(xs) / len(xs)
+        sxx = sum((x - mx) ** 2 for x in xs)
+        coef, resid = [], []
+        for k in range(1, 5):
+            ys = [r[k] for r in rows]
+            my = sum(ys) / len(ys)
+            b = (sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx) if sxx > 1e-9 else 0.0
+            a = my - b * mx
+            coef.append([round(a, 5), round(b, 5)])
+            resid.append(round(statistics.median(abs(y - (a + b * x)) for x, y in zip(xs, ys)), 4))
+        cal[st] = {"pairs": len(rows), "edges": ["left", "right", "top", "bottom"], "coef_a_b": coef,
+                   "median_residual_of_old_box_size": resid}
+    return cal
+
+
+def apply_box_calibration(rec: dict, cal: dict, stats: Counter):
+    """Tighten the one-3D-box soldier boxes of an older picture with the learned calibration."""
+    p = rec_pitch(rec)
+    for o in rec["objects"]:
+        if o["kind"] != "s" or o.get("soldier_box") != "3d_box":
+            continue
+        c = cal.get(_stance_key(o)) or cal.get("ANY")
+        if c is None or p is None:
+            stats["soldier_box_loose"] += 1
+            continue
+        x = abs(p) / 90.0
+        dl, dr, dt, db = (a + b * x for a, b in c["coef_a_b"])
+        x0, y0, x1, y1 = _edges(o["cx"], o["cy"], o["w"], o["h"])
+        w, h = x1 - x0, y1 - y0
+        nx0, nx1, ny0, ny1 = x0 + dl * w, x1 - dr * w, y0 + dt * h, y1 - db * h
+        if nx1 - nx0 < 0.2 * w or ny1 - ny0 < 0.2 * h:
+            stats["soldier_box_loose"] += 1
+            continue
+        o["cx"], o["cy"], o["w"], o["h"] = (nx0 + nx1) / 2, (ny0 + ny1) / 2, nx1 - nx0, ny1 - ny0
+        o["soldier_box"] = "corrected_3d_box"
+        stats["soldier_box_corrected"] += 1
 
 
 def have_pillow() -> bool:
@@ -496,6 +609,7 @@ def build_meta(rec: dict, name: str, split: str, W: int, H: int, classes: list[s
             if o.get("ground_norm"):
                 e["ground_px"] = [round(o["ground_norm"][0] * W, 2), round(o["ground_norm"][1] * H, 2)]
         if o["kind"] == "s":
+            e["box_method"] = o.get("soldier_box", "3d_box")
             e["stance"] = stance_of(o, W, H)
             e["stance_source"] = o["stance_source"]
             e["inside_building"] = o["inside_building"]
@@ -640,6 +754,13 @@ def process(records: list[dict], shot_dirs: list[Path], out: Path, args, seen: s
             else:
                 stats[f"{what}_estimated"] += 1
 
+        if args.box_calibration:
+            apply_box_calibration(rec, args.box_calibration, stats)
+        for o in rec["objects"]:
+            if o["kind"] == "s":
+                stats["soldier_box_" + {"body_parts": "tight", "hit_point_parts": "tight_hitpoints"}.get(o.get("soldier_box"), "x")] += 1
+        stats.pop("soldier_box_x", None)
+
         split = pick_split(rec, args.split, args.val_regions, args.test_regions)
         if enhanced is not None:
             enhanced.save(out / "images" / split / f"{name}.png", compress_level=3)
@@ -650,7 +771,10 @@ def process(records: list[dict], shot_dirs: list[Path], out: Path, args, seen: s
         with open(out / "labels" / split / f"{name}.txt", "w", encoding="utf-8") as lf:
             for e in meta["objects"]:
                 b = e["box_norm"]
-                lf.write(f"{e['class_id']} {b['cx']:.6f} {b['cy']:.6f} {b['w']:.6f} {b['h']:.6f}\n")
+                line = f"{e['class_id']} {b['cx']:.6f} {b['cy']:.6f} {b['w']:.6f} {b['h']:.6f}"
+                if args.pose:
+                    line += " " + keypoint_field(e, W, H)
+                lf.write(line + "\n")
         (out / "meta" / f"{name}.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
         if args.previews and stats["previews"] < args.previews and have_pillow():
             try:
@@ -661,6 +785,32 @@ def process(records: list[dict], shot_dirs: list[Path], out: Path, args, seen: s
         stats[split] += 1
         added += 1
     return added
+
+
+def report_box_fit(out: Path):
+    """How far the bottom of a standing soldier's box is below his feet (ground point), per box method.
+    Tight boxes: a few % of the box height (toes, boots). One 3D box: 10-40 %."""
+    import statistics
+    groups: dict[str, list] = {}
+    for mp in (out / "meta").glob("*.json"):
+        try:
+            m = json.loads(mp.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for o in m.get("objects", []):
+            if o.get("type") != "soldier" or o.get("stance") != "standing" or o.get("inside_building") or not o.get("ground_px"):
+                continue
+            x0, y0, x1, y1 = o["box_px"]
+            h = y1 - y0
+            if h < 12 or y1 >= m["height"] - 1 or y0 <= 0:
+                continue
+            gx, gy = o["ground_px"]
+            groups.setdefault(o.get("box_method", "3d_box"), []).append(((y1 - gy) / h, (x0 + x1) / 2 - gx))
+    if not groups:
+        return
+    print("\nstanding soldiers, box bottom below the feet (share of box height) / box centre right of the feet (px):")
+    for k, v in sorted(groups.items()):
+        print(f"  {k:<18} {len(v):5d} boxes   bottom {statistics.median(r[0] for r in v):+.2f}   centre {statistics.median(r[1] for r in v):+.1f} px")
 
 
 def write_manifest(out: Path, classes: list[str]):
@@ -767,6 +917,11 @@ def main():
     ap.add_argument("--jpg", action="store_true", help="with --roboflow: store images as JPEG (much smaller zips)")
     ap.add_argument("--no-enhance", dest="enhance", action="store_false",
                     help="copy the screenshots unchanged (default: haze / exposure correction, see tools/zpi_enhance.py)")
+    ap.add_argument("--pose", action="store_true",
+                    help="YOLO-pose labels: every box also gets one keypoint, the ground point (feet / under the hull / "
+                         "impact point); train with a -pose model so the detector predicts the ground point directly")
+    ap.add_argument("--no-box-fix", dest="box_fix", action="store_false",
+                    help="keep the loose one-3D-box soldier boxes of older pictures as they are")
     ap.add_argument("--max-buildings", type=int, default=3,
                     help="leave out pictures with more labelled buildings than this (default 3, -1 = keep all)")
     ap.add_argument("--min-green", type=float, default=0.0,
@@ -784,12 +939,13 @@ def main():
     # one dataset = one class scheme (mixing would scramble the class numbers)
     scheme_file = out / "scheme.txt"
     has_images = any((out / "images" / s).glob("*.png") for s in SPLITS if (out / "images" / s).exists())
+    scheme = args.classes + ("+pose" if args.pose else "")
     old_scheme = scheme_file.read_text(encoding="utf-8").strip() if scheme_file.exists() else ("legacy" if has_images else None)
-    if old_scheme and old_scheme != args.classes:
-        sys.exit(f"'{out}' was built with class scheme '{old_scheme}', not '{args.classes}'.\n"
+    if old_scheme and old_scheme != scheme:
+        sys.exit(f"'{out}' was built with class scheme '{old_scheme}', not '{scheme}'.\n"
                  f"Delete the folder (everything is rebuilt from the logs) or use --out with another folder name.")
-    scheme_file.write_text(args.classes + "\n", encoding="utf-8")
-    write_yaml(out, classes)
+    scheme_file.write_text(scheme + "\n", encoding="utf-8")
+    write_yaml(out, classes, args.pose)
     args.val_regions = {int(x) for x in args.val_regions.split(",") if x.strip()}
     args.test_regions = {int(x) for x in args.test_regions.split(",") if x.strip()}
 
@@ -813,6 +969,17 @@ def main():
 
     diag: Counter = Counter()
     records = read_labels(rpts, diag)
+    # soldier boxes of older pictures: learn the correction from the pictures that have both boxes
+    args.box_calibration = fit_box_calibration(records) if args.box_fix else {}
+    n_legacy = sum(1 for r in records for o in r["objects"] if o["kind"] == "s" and o.get("soldier_box") == "3d_box")
+    if args.box_calibration:
+        (out / "box_calibration.json").write_text(json.dumps(args.box_calibration, indent=1), encoding="utf-8")
+        print("soldier box correction for older pictures learned from "
+              + ", ".join(f"{k} {v['pairs']}" for k, v in args.box_calibration.items()) + " pairs (box_calibration.json)")
+    elif n_legacy and args.box_fix:
+        print(f"NOTE: {n_legacy} soldier boxes come from older pictures (one 3D box, loose at the bottom). They are corrected\n"
+              f"      once pictures from the new mission are in the logs (needs {CAL_MIN_PAIRS}+ soldiers): take new pictures,\n"
+              f"      then build the dataset into a NEW folder (--out ...) so every picture is labelled again.")
     sessions_all = list(dict.fromkeys(r["session"] for r in records))
     if args.latest and sessions_all:
         args.session = [sessions_all[-1]]
@@ -861,6 +1028,7 @@ def main():
     print(f"\ndataset now: {len(rows)} images (train {tot['train']}, val {tot['val']}, test {tot['test']})")
     print("boxes: " + ", ".join(f"{n} {tot[n]}" for n in classes))
 
+    report_box_fit(out)
     if args.roboflow:
         export_roboflow(out, args.jpg, classes)
 

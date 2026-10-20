@@ -1,7 +1,7 @@
 // =====================================================================
 //  ZPI scene pack - automatic dataset generator
 //
-//  Home key: generate ZPI_cfg_tourTarget labelled screenshots (default 1000)
+//  Home key: generate ZPI_cfg_tourTarget labelled screenshots
 //            on its own; Home again stops after the current picture.
 //
 //  Clear weather, noon. For every location marker it goes through a
@@ -70,10 +70,10 @@ ZPI_fnc_tourLead = {
 };
 
 // ---- one burst: fixed camera, a picture every ZPI_cfg_burstInterval s ------------------------
-// [target, gsd range [min, max], pictures, view] -> pictures taken (0 = view skipped)
+// [target, gsd range [min, max], pictures, view, max. buildings in view] -> pictures taken (0 = view skipped)
 // view = [distance range, elevation range, camera azimuth center (-1 = any), azimuth spread, jitter m]
 ZPI_fnc_tourBurst = {
-    params ["_target", "_gsd", ["_shots", ZPI_cfg_burstShots], ["_view", []]];
+    params ["_target", "_gsd", ["_shots", ZPI_cfg_burstShots], ["_view", []], ["_maxB", ZPI_cfg_maxBuildings]];
     _view params [["_dist", ZPI_cfg_tourDist], ["_elev", ZPI_cfg_tourElev], ["_azC", -1], ["_azS", 180], ["_jit", 3]];
     call ZPI_fnc_tourWaitIdle;
     if (call ZPI_fnc_tourDone) exitWith { 0 };
@@ -94,7 +94,7 @@ ZPI_fnc_tourBurst = {
         sleep _settle;              // zoom follows the new range, terrain and objects load in
         if (ZPI_tourStop) exitWith {};
         private _nb = call ZPI_fnc_buildingsInView;
-        if (_nb <= ZPI_cfg_maxBuildings) exitWith { _ok = true };
+        if (_nb <= _maxB) exitWith { _ok = true };
         ["view_rejected", format ['{"buildings":%1,"try":%2}', _nb, _try]] call ZPI_fnc_event;
         // next try: another side, same zoom (soldiers keep the same pixel size in every picture)
     };
@@ -123,6 +123,8 @@ ZPI_fnc_tourBurst = {
 };
 
 // One shell on clear ground next to _near; the camera looks at the impact point first.
+// Zoomed out (ZPI_cfg_tourExplosionGSD) and aimed at the middle of the smoke column, so the
+// column is a part of the picture and the measured box fits the smoke.
 ZPI_fnc_tourExplosion = {
     params ["_near"];
     call ZPI_fnc_tourWaitIdle;
@@ -132,7 +134,7 @@ ZPI_fnc_tourExplosion = {
     for "_try" from 1 to ZPI_cfg_viewTries do {
         ZPI_scaleLock = true;
         ZPI_targetGSD = (ZPI_cfg_tourExplosionGSD select 0) + random ((ZPI_cfg_tourExplosionGSD select 1) - (ZPI_cfg_tourExplosionGSD select 0));
-        [_p vectorAdd [0, 0, 4], random 360, (ZPI_cfg_tourElev select 0) + random ((ZPI_cfg_tourElev select 1) - (ZPI_cfg_tourElev select 0)),
+        [_p vectorAdd [0, 0, 8], random 360, (ZPI_cfg_tourElev select 0) + random ((ZPI_cfg_tourElev select 1) - (ZPI_cfg_tourElev select 0)),
             (ZPI_cfg_tourDist select 0) + random ((ZPI_cfg_tourDist select 1) - (ZPI_cfg_tourDist select 0))] call ZPI_fnc_tourAim;
         sleep ZPI_cfg_tourSettle;
         if ((call ZPI_fnc_buildingsInView) <= ZPI_cfg_maxBuildings) exitWith { _ok = true };
@@ -173,7 +175,7 @@ ZPI_fnc_tourCentroid = {        // [objects] -> average position ASL
 ZPI_fnc_tourAnimate = {
     params ["_share"];
     if (_share <= 0) exitWith {};
-    private _men = (["soldier"] call ZPI_fnc_tourObjs) select { isNull objectParent _x && {(unitPos _x) != "Down"} };
+    private _men = (["soldier"] call ZPI_fnc_tourObjs) select { isNull objectParent _x && {!((unitPos _x) in ["Down", "Middle"])} };   // kneeling / prone stay
     private _walkers = (_men call BIS_fnc_arrayShuffle) select [0, ceil ((count _men) * _share)];
     {
         _x enableAI "PATH";
@@ -270,7 +272,7 @@ ZPI_fnc_tourScene = {
 
     switch (true) do {
         // ---- driving columns (road convoy, tank column, tank column across fields)
-        case (_scene in [4, 11, 17]): {
+        case (_scene in [4, 11, 17, 19]): {
             sleep 10;                                           // let the column get going
             while { call _more } do {
                 private _v = call _vehs;
@@ -278,31 +280,34 @@ ZPI_fnc_tourScene = {
                 private _moving = _v select { (speed _x) > 3 };
                 if (_i % 3 == 2) then {
                     [selectRandom ([_v, _moving] select (_moving isNotEqualTo [])), _vehicleGSD,
-                        [ZPI_cfg_burstShots] call _len, [ZPI_cfg_tourDist]] call _shoot;               // one vehicle
+                        [ZPI_cfg_burstShots] call _len, [ZPI_cfg_tourDist, ZPI_cfg_tourElevColumn]] call _shoot;          // one vehicle
                 } else {
-                    [_v, ZPI_cfg_tourColumnGSD, [ZPI_cfg_burstShots] call _len, [ZPI_cfg_tourDistWide]] call _shoot;   // the column
+                    [_v, ZPI_cfg_tourColumnGSD, [ZPI_cfg_burstShots] call _len, [ZPI_cfg_tourDistWide, ZPI_cfg_tourElevColumn]] call _shoot;   // the column
                 };
                 _i = _i + 1;
             };
         };
         // ---- walking soldiers: a group walking through a fixed view
-        case (_scene in [5, 12]): {
+        //      Two of three bursts from a flatter angle (ZPI_cfg_tourElevPatrol, ~30-45 deg), more from the side.
+        case (_scene in [5, 12, 20, 21]): {
             sleep 5;
             while { call _more } do {
                 private _m = call _men;
                 if (_m isEqualTo []) exitWith {};
                 private _u = selectRandom _m;
+                private _view = [_sView, [ZPI_cfg_tourDist, ZPI_cfg_tourElevPatrol]] select (_i % 3 != 2);
                 if (_i % 2 == 0) then {
-                    [_m select { (_x distance2D _u) < ZPI_cfg_tourGroupRadius }, _soldierGSD, [ZPI_cfg_burstShots] call _len, _sView] call _shoot;
+                    [_m select { (_x distance2D _u) < ZPI_cfg_tourGroupRadius }, _soldierGSD, [ZPI_cfg_burstShots] call _len, _view] call _shoot;
                 } else {
-                    [_m select { (_x distance2D _u) < 5 }, _soldierGSD, [ZPI_cfg_burstShots] call _len, _sView] call _shoot;
+                    [_m select { (_x distance2D _u) < 5 }, _soldierGSD, [ZPI_cfg_burstShots] call _len, _view] call _shoot;
                 };
                 _i = _i + 1;
             };
         };
         // ---- building entries: squad together, stacking, going in, the rest outside.
         //      The camera stays on the side where the squad waits, so nobody is hidden.
-        case (_scene in [10, 13, 14, 15, 16]): {
+        case (_scene in [10, 13, 14, 15, 16, 22]): {
+            private _maxB = [ZPI_cfg_maxBuildings, ZPI_cfg_loneMaxBuildings] select (_scene == 22);   // lone building: only that house
             // Aim at the squad outside (those still walking in and those who stay), plus the door
             // once they are near it. Same zoom as all soldier pictures: soldiers keep their size.
             sleep 2;
@@ -324,7 +329,7 @@ ZPI_fnc_tourScene = {
                 // centred on the soldiers outside, plus the door once they are close to it
                 private _el = 55;
                 [_c vectorAdd [0, 0, 1], ZPI_cfg_tourSoldierGSD, [ZPI_cfg_burstShots] call _len,
-                    [ZPI_cfg_tourDist, [_el - 8, _el + 8], _az, 50, 0]] call _shoot;
+                    [ZPI_cfg_tourDist, [_el - 8, _el + 8], _az, 50, 0], _maxB] call _shoot;
                 _i = _i + 1;
             };
         };
@@ -337,6 +342,24 @@ ZPI_fnc_tourScene = {
                 private _k = [call _vehs, 1] call ZPI_fnc_tourFiring;
                 if (_k < 0) exitWith {};
                 if (_k == 0) then { _fails = _fails + 1 };
+            };
+        };
+        // ---- groups down (kneeling / prone): the whole group, then parts of it; nobody walks.
+        //      Half the bursts from the flatter patrol angle, half from the usual soldier angle.
+        case (_scene == 23): {
+            sleep 4;                                            // everybody gets down
+            while { call _more } do {
+                private _gs = ZPI_downGroups apply { _x select { alive _x } };
+                _gs = _gs select { _x isNotEqualTo [] };
+                if (_gs isEqualTo []) exitWith {};
+                private _grp = selectRandom _gs;
+                private _view = [_sView, [ZPI_cfg_tourDist, ZPI_cfg_tourElevPatrol]] select (_i % 2 == 0);
+                private _tgt = if (_i % 3 == 2) then {
+                    private _u = selectRandom _grp;
+                    _grp select { (_x distance2D _u) < 5 }
+                } else { _grp };
+                [_tgt, _soldierGSD, [ZPI_cfg_burstShotsStatic] call _len, _view] call _shoot;
+                _i = _i + 1;
             };
         };
         // ---- static layouts: some soldiers walk; every target in turn, vehicles a bit wider
@@ -361,7 +384,7 @@ ZPI_fnc_tourScene = {
     };
 
     // tanks in a static scene also fire (labelled "tank_fire"), not in driving columns
-    if (ZPI_cfg_tourFiringPerScene > 0 && {!(_scene in [4, 11, 17, 18, 9, 10, 13, 14, 15, 16])} && {!(call ZPI_fnc_tourDone)}) then {
+    if (ZPI_cfg_tourFiringPerScene > 0 && {!(_scene in [4, 11, 17, 18, 19, 9, 10, 13, 14, 15, 16, 22])} && {!(call ZPI_fnc_tourDone)}) then {
         private _tanks = ["tracked_vehicle"] call ZPI_fnc_tourObjs;
         if (_tanks isNotEqualTo []) then {
             for "_e" from 1 to ZPI_cfg_tourFiringPerScene do {
@@ -371,8 +394,8 @@ ZPI_fnc_tourScene = {
         };
     };
 
-    // one explosion close-up (not in the negatives or building scenes)
-    if (ZPI_cfg_tourExplosions > 0 && {!(_scene in [9, 10, 13, 14, 15, 16, 18])} && {!(call ZPI_fnc_tourDone)}) then {
+    // one explosion picture (not in the negatives, building scenes or tank firing)
+    if (ZPI_cfg_tourExplosions > 0 && {!(_scene in [9, 10, 13, 14, 15, 16, 18, 22])} && {!(call ZPI_fnc_tourDone)}) then {
         private _a = call _all;
         if (_a isNotEqualTo []) then {
             for "_e" from 1 to ZPI_cfg_tourExplosions do {
@@ -394,8 +417,13 @@ ZPI_fnc_tourDataset = {
     ZPI_tourStart = ZPI_shotCount;
     ZPI_autoCapture = false;
     ZPI_firefight = false;
-    ["tour_start", format ['{"target":%1,"burst":%2,"interval":%3,"max_buildings":%4}',
-        _target, ZPI_cfg_burstShots, ZPI_cfg_burstInterval, ZPI_cfg_maxBuildings]] call ZPI_fnc_event;
+    // Layout seeds never repeat between runs: every run continues where the last run on this PC
+    // stopped (kept in the Arma profile, saved after every scene, so also after a crash).
+    // Runs before this version used seeds below 1000.
+    ZPI_cfg_seed = (profileNamespace getVariable ["ZPI_nextTourSeed", 1000]) max 1000;
+    if (ZPI_cfg_seed > 16000) then { ZPI_cfg_seed = 1000 };          // seeds stay exact in 32-bit floats
+    ["tour_start", format ['{"target":%1,"burst":%2,"interval":%3,"max_buildings":%4,"first_seed":%5}',
+        _target, ZPI_cfg_burstShots, ZPI_cfg_burstInterval, ZPI_cfg_maxBuildings, ZPI_cfg_seed]] call ZPI_fnc_event;
     call ZPI_fnc_loadExposure;               // picks up a new value from tools/pick_exposure.py
     [format ["Dataset generator: %1 images, clear weather, noon, exposure %2 (Home stops)", _target,
         [str ZPI_cfg_aperture, "automatic (run the End exposure test!)"] select (ZPI_cfg_aperture <= 0)]] call ZPI_fnc_msg;
@@ -418,6 +446,8 @@ ZPI_fnc_tourDataset = {
                 ZPI_timeIndex = ZPI_cfg_tourTime;       call ZPI_fnc_applyTime;
                 ZPI_weatherIndex = ZPI_cfg_tourWeather; call ZPI_fnc_applyWeather;
                 ZPI_cfg_seed = ZPI_cfg_seed + 1;
+                profileNamespace setVariable ["ZPI_nextTourSeed", ZPI_cfg_seed + 1];
+                saveProfileNamespace;
                 // a green, uncluttered site near this marker for this kind of scene
                 private _site = [_anchor, _x] call ZPI_fnc_tourSite;
                 if (_site isEqualTo []) then {

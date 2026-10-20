@@ -22,6 +22,10 @@ Usage (from the mission folder; --dataset and --out are folders inside <mission>
     python tools/eval_geolocation.py --dataset run1 --out geoloc_run1
     python tools/eval_geolocation.py --pred runs/detect/predict/labels --iou 0.5   # --pred: relative to the current folder
     python tools/eval_geolocation.py --square-pixels     # vfov from hfov and the aspect ratio
+    python tools/eval_geolocation.py --anchor keypoint --pred runs/pose/predict/labels   # YOLO-pose: predicted ground point
+
+--anchor keypoint (dataset built with make_yolo_dataset.py --pose, model trained as YOLO-pose): step 2
+uses the labelled ground point itself (= step 1), step 3 the keypoint the detector predicts.
 Output: <out>/per_object.csv, <out>/summary.json and a table on screen.
 
 Pictures taken before the precision fix (no terrain grid, no ground points) still work: each
@@ -235,9 +239,10 @@ def main():
     ap.add_argument("--square-pixels", action="store_true", help="derive vfov from hfov and the image aspect ratio")
     ap.add_argument("--on-terrain-tol", type=float, default=0.3,
                     help="step 1 only uses objects whose ground point is within this many m of the DEM (default 0.3)")
-    ap.add_argument("--anchor", choices=["bottom", "center"], default="bottom",
-                    help="pixel used for steps 2 and 3: box bottom-centre on the ground (default), or box centre "
-                         "intersected at half the object height above the ground (better for vehicles seen at an angle)")
+    ap.add_argument("--anchor", choices=["bottom", "center", "keypoint"], default="bottom",
+                    help="pixel used for steps 2 and 3: box bottom-centre on the ground (default), box centre "
+                         "intersected at half the object height above the ground (better for vehicles seen at an angle), "
+                         "or the ground-point keypoint (labels: ground_px; detections: YOLO-pose keypoint)")
     ap.add_argument("--out", default="geoloc_eval")
     args = ap.parse_args()
 
@@ -302,8 +307,13 @@ def main():
                 n_off_terrain += 1
 
             # step 2: label box bottom-centre -> DEM
-            bc = ((bx[0] + bx[2]) / 2, bx[3]) if args.anchor == "bottom" else ((bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2)
-            lift = 0.0 if args.anchor == "bottom" else HALF_HEIGHT.get(t, 1.0)
+            if args.anchor == "keypoint":
+                if not o.get("ground_px"):
+                    continue
+                bc, lift = tuple(o["ground_px"]), 0.0
+            else:
+                bc = ((bx[0] + bx[2]) / 2, bx[3]) if args.anchor == "bottom" else ((bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2)
+                lift = 0.0 if args.anchor == "bottom" else HALF_HEIGHT.get(t, 1.0)
             hit = ot.intersect(cam.o, cam.ray(*bc), lift=lift)
             if hit:
                 e, al, ac = error_parts(hit, g, cam.heading)
@@ -325,17 +335,27 @@ def main():
                 v = line.split()
                 if len(v) < 5:
                     continue
-                conf = float(v[5]) if len(v) > 5 else 1.0
+                # detect: cls cx cy w h [conf];  pose: cls cx cy w h kx ky [kv] [conf]
+                kp = None
+                if args.anchor == "keypoint":
+                    if len(v) < 7:
+                        continue
+                    if float(v[5]) == 0 and float(v[6]) == 0 or (len(v) >= 8 and float(v[7]) <= 0):
+                        continue          # no ground point for this object (buildings, gun fire)
+                    kp = (float(v[5]) * cam.W, float(v[6]) * cam.H)
+                    conf = float(v[-1]) if len(v) in (8, 9) else 1.0
+                else:
+                    conf = float(v[5]) if len(v) > 5 else 1.0
                 if conf < args.conf:
                     continue
                 cid = int(v[0])
                 t = class_type(classes[cid]) if cid < len(classes) else str(cid)
-                dets.append((conf, t, box_px(*map(float, v[1:5]), cam.W, cam.H)))
+                dets.append((conf, t, box_px(*map(float, v[1:5]), cam.W, cam.H), kp))
             dets.sort(key=lambda d: -d[0])
             det_total += len(dets)
             gt_total += len(gts)
             used = set()
-            for conf, t, db in dets:
+            for conf, t, db, kp in dets:
                 best, bi = 0, -1
                 for k, (o, gt_t, g, bx, ot) in enumerate(gts):
                     if k in used or gt_t != t:
@@ -348,8 +368,11 @@ def main():
                 used.add(bi)
                 det_matched += 1
                 o, gt_t, g, bx, ot = gts[bi]
-                bc = ((db[0] + db[2]) / 2, db[3]) if args.anchor == "bottom" else ((db[0] + db[2]) / 2, (db[1] + db[3]) / 2)
-                lift = 0.0 if args.anchor == "bottom" else HALF_HEIGHT.get(t, 1.0)
+                if kp is not None:
+                    bc, lift = kp, 0.0
+                else:
+                    bc = ((db[0] + db[2]) / 2, db[3]) if args.anchor == "bottom" else ((db[0] + db[2]) / 2, (db[1] + db[3]) / 2)
+                    lift = 0.0 if args.anchor == "bottom" else HALF_HEIGHT.get(t, 1.0)
                 hit = ot.intersect(cam.o, cam.ray(*bc), lift=lift)
                 if hit:
                     e, al, ac = error_parts(hit, g, cam.heading)

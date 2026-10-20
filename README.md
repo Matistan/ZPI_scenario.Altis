@@ -18,7 +18,7 @@ git clone https://github.com/Matistan/ZPI_scenario.Altis
 Script-generated scenes with soldiers and armour are filmed by a camera a player flies himself, by a scripted drone orbit, or by the automatic dataset generator.
 
 - **P** takes a screenshot and labels it automatically: soldiers by stance (standing, kneeling, prone), tanks, military vehicles, explosions, tank gun fire (`tank_fire`) and buildings.
-- **Home** starts the **dataset generator**: it visits 18 scenes on green, open ground and makes ~1000 labelled pictures by itself.
+- **Home** starts the **dataset generator**: it visits 23 scenes on green, open ground and makes `ZPI_cfg_tourTarget` labelled pictures by itself (1018 per run now: 982 + 1018 = 2000).
 - **Every screenshot gets a JSON file** with the camera telemetry and intrinsics, the laser-rangefinder reading, a terrain height grid under the view and the map coordinates of every labelled object.
 - **Z** flies an orthophoto of the scene area, which `tools/make_ortho.py` turns into a georeferenced map with the soldiers drawn on it.
 
@@ -34,7 +34,7 @@ ZPI_scenario.Altis\           mission folder = repository root (any name ending 
   zpi\                        script's source code
     config.sqf                everything you will want to tweak
     exposure.sqf              fixed camera exposure, written by tools\pick_exposure.py (per PC)
-    scenes.sqf                the 19 scenes (18 in the generator + "mixed")
+    scenes.sqf                the 24 scenes (23 in the generator + "mixed")
     tour.sqf                  Home key: the dataset generator (sites, bursts, zoom, firing, explosions)
     sites.sqf                 where scenes go: green ground, few buildings, buildings a squad can enter
     drone.sqf                 camera, FOV, laser rangefinder, constant-pixel-size lock, HUD, telemetry
@@ -124,7 +124,7 @@ The readout and the crosshair are UI, so they never appear in **P** screenshots:
 |---|---|
 | 1–9, 0 | scenes (below) |
 | **- (minus)** | building scene |
-| **Shift+1 … Shift+6** | more building scenes, the tank column across fields, tanks firing (below) |
+| **Shift+1 … Shift+0**, **Shift+-** | more building scenes, tank columns, tanks firing, patrols, groups kneeling / prone (below) |
 | N | new layout (seed + 1) |
 | X | clear |
 | L / Alt+click on map / C | next marker location / clicked point / point in the middle of the screen |
@@ -155,33 +155,41 @@ The readout and the crosshair are UI, so they never appear in **P** screenshots:
 | **Shift+4** | **building_file** | 8 soldiers walk up in a single file from ~60 m, 4 go in one by one, 4 stay outside |
 | **Shift+5** | **tank_column_field** | 4–5 tanks driving in a column across open fields (no road, no village) |
 | **Shift+6** | **tank_firing** | 3 crewed tanks in a loose line on open ground, a few soldiers behind; **K** / **Shift+K** make them fire. Every main-gun shot gets an automatic picture with a `tank_fire` label |
+| **Shift+7** | **tank_column_long** | 7 tanks / tracked APCs close together (26 m) on a country road |
+| **Shift+8** | **patrol_field** | a squad of 6–8 on patrol across open fields, weapons up, in a line, wedge, echelon or staggered column |
+| **Shift+9** | **patrol_road** | a squad of 8 walking along a country road in a file or staggered column (turns back before a village) |
+| **Shift+0** | **building_lone** | squad of 8 enters a **lone** building (no other building within 120 m, `ZPI_cfg_loneRadius`): 4 go in, 4 wait; generator pictures show only that one building |
+| **Shift+-** | **groups_down** | two groups 35–55 m apart, kneeling or lying: prone firing line, kneeling line, all-round defence circle, wedge gone to ground, or a tight cluster; nobody walks |
 
 **Where scenes go.** Scenes look for green ground with few buildings: open-ground scenes take the greenest flat spot with no buildings around, road scenes a road piece out in the country (at most 1 building within 150 m; columns turn back before a village), building scenes a building with at most 3 buildings within 70 m (a farm, not a village). The ground type comes from the game (`surfaceType`); how green each type counts is set in `ZPI_cfg_surfaceGreen` in `config.sqf`.
 
-**Building scenes (-, Shift+1 … Shift+4).** The squad forms up close together, walks to a waiting point 6 m outside the door and gathers there in a tight block. Then the entry team goes through the door **one by one** (1.2–2.5 s apart), while the rest stops right there, half of them kneeling, watching outwards, so they stay visible next to the building. The squad always comes from the greenest side of the building. The script counts how many soldiers are inside the building at every moment. A soldier counts as inside when he stands within the building's footprint *and* a ray straight up from his head hits that building's roof, with Arma's `insideBuilding` as a backup check. The count shows in the HUD, every change is logged as an `occupancy` event, and each screenshot's JSON includes `building_occupancy` (inside / squad). Soldiers inside are mostly hidden from the drone, so they get no box unless at least 30 % of them is visible, through a door or window for example. This is the ground truth for "how many soldiers did the drone see go in". Every soldier box, in every scene, also has `inside_building: true/false`.
+**Building scenes (-, Shift+1 … Shift+4, Shift+0).** The squad forms up close together, walks to a waiting point 6 m outside the door and gathers there in a tight block. Then the entry team goes through the door **one by one** (1.2–2.5 s apart), while the rest stops right there, half of them kneeling, watching outwards, so they stay visible next to the building. The squad always comes from the greenest side of the building. The script counts how many soldiers are inside the building at every moment. A soldier counts as inside when he stands within the building's footprint *and* a ray straight up from his head hits that building's roof, with Arma's `insideBuilding` as a backup check. The count shows in the HUD, every change is logged as an `occupancy` event, and each screenshot's JSON includes `building_occupancy` (inside / squad). Soldiers inside are mostly hidden from the drone, so they get no box unless at least 30 % of them is visible, through a door or window for example. This is the ground truth for "how many soldiers did the drone see go in". Every soldier box, in every scene, also has `inside_building: true/false`.
 
 ## Dataset generator (Home)
 
-Press **Home** and leave the game running: the mission makes **1000 labelled screenshots on its own** (`ZPI_cfg_tourTarget`), always in clear weather at noon. For every location marker it goes through a shuffled list of the 18 scenes (`ZPI_cfg_tourScenes`, all except "mixed"), with a new layout every time. The first scene of a run is always the tank-firing scene, so even a short test has firing pictures.
+Press **Home** and leave the game running: the mission makes **1000 labelled screenshots on its own** (`ZPI_cfg_tourTarget`), always in clear weather at noon. For every location marker it goes through a shuffled list of scenes (`ZPI_cfg_tourScenes`: all 23 except "mixed"; tank columns, patrols, lone-building entries and kneeling / prone groups are listed twice, so they come twice per round), with a new layout every time. The first scene of a run is always the tank-firing scene, so even a short test has firing pictures.
+
+**No repeats between runs.** Every mission start writes its screenshots into a new folder (`Screenshots\zpi\<start time>\`), and the layout seed of every scene continues from where the last generator run on this PC stopped (stored in the Arma profile, starting at 1000; runs before this version used seeds below 1000). Sites and camera positions are random anyway, so no two runs repeat a picture.
 
 **Sites.** Each scene gets its own site within 3 km of the marker (`ZPI_cfg_siteRadius`): the greenest ground with the fewest buildings that suits the scene (open field, country road, or a lone building / farm). The region (train/val/test split) stays the marker number. If the best site near a marker is still not very green, a message says so; place markers in greener parts of the map then.
 
 **Bursts.** The camera stays at one position and takes a picture **every 2 s** (`ZPI_cfg_burstInterval`), 5 pictures for moving scenes and 3 for static ones; then it moves to the next position. So the movement of soldiers and tanks shows between the pictures of one burst. Burst pictures are named `<scene>_b<burst>_<n>_<frame>.png` (e.g. `tank_column_b0042_3_00123456.png` = burst 42, picture 3), and the JSON has `"burst": {"id": 42, "index": 3, "length": 5}`. The camera aims where the targets will be in the middle of the burst, so they move through the picture.
 
-**One soldier size everywhere.** Every generator picture that can contain soldiers uses the same zoom: soldier close-ups, groups, building scenes, static vehicle scenes and tank firing at 0.009–0.0115 m/px (`ZPI_cfg_tourSoldierGSD`), explosion close-ups a little wider at 0.011–0.014 m/px. A soldier is therefore always about 55–90 px, so the detector does not have to learn many sizes of the same class. Only driving columns (no soldiers in view) are filmed wider.
+**One soldier size everywhere.** Every generator picture that can contain soldiers uses the same zoom: soldier close-ups, groups, building scenes, patrols, static vehicle scenes and tank firing at 0.009–0.0115 m/px (`ZPI_cfg_tourSoldierGSD`). A soldier is therefore always about 55–90 px, so the detector does not have to learn many sizes of the same class. Only driving columns (no soldiers in view) and explosion pictures (shot away from the soldiers) are filmed wider.
 
-**At most 3 buildings per picture** (`ZPI_cfg_maxBuildings`). Before a burst, the generator counts the buildings that would get a box; if there are more, it tries another angle at the same zoom, up to 4 times (`ZPI_cfg_viewTries`), and otherwise skips that view.
+**At most 3 buildings per picture** (`ZPI_cfg_maxBuildings`; lone-building scenes: 1, `ZPI_cfg_loneMaxBuildings`). Before a burst, the generator counts the buildings that would get a box; if there are more, it tries another angle at the same zoom, up to 4 times (`ZPI_cfg_viewTries`), and otherwise skips that view.
 
 | Scenes | What the camera does |
 |---|---|
-| static layouts (1, 2, 3, 6, 7, 8, 9) | 40 % of the standing soldiers walk around their spot (`ZPI_cfg_tourAnimate`); bursts of 3 on soldiers and groups within 8 m (soldier scale, camera 35–60° down so more of the soldier's height shows) and on vehicles (also the soldier scale when soldiers can be in view), 120–300 m away |
-| driving columns (4, [, Shift+5) | the column drives through a fixed view, 220–450 m away: whole column (0.05–0.09 m/px) and single vehicles (0.025–0.05 m/px); columns drive at 20 km/h (`ZPI_cfg_convoySpeed`) |
-| walking soldiers (5, ]) | a group walks through a fixed view: group shots and close-ups, all at the soldier scale |
-| building entries (-, Shift+1 … Shift+4) | **25–30 pictures per scene**, at most 8 soldiers, about half go in: the squad walking up together, gathering at the door, going in one by one, the rest waiting outside. The camera aims at the soldiers outside (plus the door once they are near it), at the same zoom as all soldier pictures; the camera stays on the side where the squad waits, so nobody outside is hidden by the building |
+| static layouts (1, 2, 3, 6, 7, 8, 9) | 40 % of the standing soldiers walk around their spot (`ZPI_cfg_tourAnimate`; kneeling and prone soldiers stay down); bursts of 3 on soldiers and groups within 8 m (soldier scale, camera 35–60° down so more of the soldier's height shows) and on vehicles (also the soldier scale when soldiers can be in view), 120–300 m away |
+| driving columns (4, [, Shift+5, Shift+7) | the column drives through a fixed view, 220–450 m away, from 30–60° above the horizon (`ZPI_cfg_tourElevColumn`), so also from the side: whole column (0.05–0.09 m/px) and single vehicles (0.025–0.05 m/px); columns drive at 20 km/h (`ZPI_cfg_convoySpeed`) |
+| walking soldiers (5, ], Shift+8, Shift+9) | a group walks through a fixed view: group shots and close-ups, all at the soldier scale; two of three bursts from a flatter angle, 30–45° (`ZPI_cfg_tourElevPatrol`), the rest at 35–60° |
+| building entries (-, Shift+1 … Shift+4, Shift+0) | **15–25 pictures per scene**, at most 8 soldiers, about half go in: the squad walking up together, gathering at the door, going in one by one, the rest waiting outside. The camera aims at the soldiers outside (plus the door once they are near it), at the same zoom as all soldier pictures; the camera stays on the side where the squad waits, so nobody outside is hidden by the building |
+| groups down (Shift+-) | bursts of 3 on a whole group or part of it, half at 30–45°, half at 35–60°; nobody moves |
 | tanks in static scenes (6, 2, 7, 8) | after the normal pictures, 2 firing episodes (`ZPI_cfg_tourFiringPerScene`), like the tank-firing scene |
 | tanks firing (Shift+6) | **first scene of every run**; the camera goes beside a tank at the soldier scale (`ZPI_cfg_tourFireGSD`, tank and muzzle blast still fit); the tank turns its turret, the camera holds still for a reference picture (at least 2 s after the previous shot, so no old flames are in it), the shot triggers the picture automatically 0.05 s later, two more follow while the smoke drifts |
 
-Each scene except the negatives, the building scenes and tank firing also gets one explosion close-up (0.011–0.014 m/px, `ZPI_cfg_tourExplosionGSD`) with a measured box. Images per scene are set in `ZPI_cfg_tourShots` (6–30). One round over all 18 scenes gives about 330 images, so 1000 images take about 2 hours and ~12 GB of disk. Mouse and keys (except Home, U and H) are ignored while it runs. Press **Home** again to stop after the current picture. All settings are in the `ZPI_cfg_tour*`, `ZPI_cfg_burst*` and "clean, green pictures" blocks of `config.sqf`.
+Each scene except the negatives, the building scenes and tank firing also gets one explosion picture with a measured box. It is **zoomed out** (0.03–0.045 m/px, picture 58–86 m wide, `ZPI_cfg_tourExplosionGSD`) and aimed at the middle of the smoke column, so the smoke is a part of the picture and the measured box fits it (zoomed in, the smoke filled the whole picture). Images per scene are set in `ZPI_cfg_tourShots` (6–25). One round over the 31 scene visits gives about 520 images, so 1018 images take about 2 hours and ~12 GB of disk. Mouse and keys (except Home, U and H) are ignored while it runs. Press **Home** again to stop after the current picture. All settings are in the `ZPI_cfg_tour*`, `ZPI_cfg_burst*` and "clean, green pictures" blocks of `config.sqf`.
 
 **Green.** The camera films from 120–300 m (columns 220–450 m). Far away, Arma shows the low-detail ground texture through a lot of haze, which makes the pictures pale brown; closer in, the grass and its colour come through. After every move the camera waits 3.5 s (`ZPI_cfg_tourSettle`) so the sharp textures have loaded.
 
@@ -199,6 +207,8 @@ Each JSON records `gsd_center_m_per_px`, `scale_lock` and `target_gsd`, so you c
 ## Labels and classes
 
 **Vehicle boxes.** The box Arma reports for a whole vehicle model is padded on every side; for a T-100 it is 6.7 m wide and 4.5 m tall instead of about 3.5 × 2.3 m. The mission therefore takes the boxes of several model LODs (visual, fire, view and geometry) and keeps their overlap, which is the tightest box that still contains the vehicle. Each vehicle type's boxes are written to the log once as `ZPI|vbox|`.
+
+**Soldier boxes (tight).** Earlier versions labelled a soldier with *one* 3D box around his body, projected into the picture. Seen from above at an angle, the near-bottom corners of that box land below his feet, so the box was loose at the bottom (10–40 % of its height below the feet) and a bit too wide. Now every body part of the visible model (head, upper arms, forearms, hands, thighs, shins, feet, toes, …) has its own small box; their corners are projected and the label is the union, which hugs the silhouette. A helmet (+8 cm) and a backpack (+22 cm behind the back) are added, rifles are not. If the game does not give animated body parts, the hit-point parts are used instead (bigger, still much tighter). Each soldier in the JSON says `"box_method"`: `body_parts`, `hit_point_parts`, `corrected_3d_box` (older picture, corrected, see Building the dataset) or `3d_box` (older picture, uncorrected). `ZPI_cfg_soldierTightBox = false` goes back to the old box.
 
 When you press **P**, the scene freezes for 2 frames. Boxes are computed from the game's 3D geometry and the screenshot is taken in the same frame. The filters stay as before: an object needs to be ≥ 30 % visible, ≥ 4 px, and mostly inside the image. Civilians and wrecks never get a box.
 
@@ -279,7 +289,7 @@ There is one file per screenshot, with the same name as the image:
 | `terrain_grid` | terrain heights (ASL) on a grid under the whole view: `heights_asl[j][i]` at (`x0` + i·`spacing_m`, `y0` + j·`spacing_m`), up to 33 × 33 points, spacing 2 m or more |
 | `pixel_rays` | for 9 × 5 image points: `[u, v, x, y, z, kind, id]`, the first surface the camera really sees there (u, v normalized; kind `g` ground, `b` building/roof, `t` tree, `e` scene object, `o` other) |
 | `objects[].ground_pos_asl` | where the object stands: a soldier's feet (floor height inside buildings), the terrain under a vehicle's or building's centre, an explosion's impact point; cm precision |
-| `objects[].ground_px` | that ground point projected into the image, in pixels |
+| `objects[].ground_px` | that ground point projected into the image, in pixels (the keypoint of `--pose` labels) |
 
 Why the precision changed: map positions near 13 km are only exact to about 1 mm in the game's 32-bit floats. The old camera axes were measured over 1 m, so every component came out as a multiple of 1/1024 (up to ~4 px error at long range). The FOV was measured over 0.1 m, which gave about 1 % FOV error (hfov and vfov disagreed by 0.9 %). Both are now measured over 1–5 km. Labels use the same camera model, so boxes got slightly more exact too.
 
@@ -314,7 +324,12 @@ python tools\make_yolo_dataset.py --roboflow --jpg   # + Roboflow zip(s)
 python tools\make_yolo_dataset.py --latest           # only the newest session (e.g. the last generator run)
 python tools\make_yolo_dataset.py --latest --limit 100 --out dataset_first100 --roboflow --jpg   # small test set for Roboflow
 python tools\make_yolo_dataset.py --latest --min-green 0.05   # leave out pictures with almost no green
+python tools\make_yolo_dataset.py --out dataset_pose --pose     # YOLO-pose labels: box + ground-point keypoint
 ```
+
+**Soldier boxes of older pictures.** Pictures taken before the tight soldier boxes have the loose one-3D-box labels. Pictures from the new mission log both boxes for every soldier, so the tool learns, per stance and camera pitch, how to turn the old box into the tight one (`box_calibration.json`, needs 40+ soldiers from new pictures) and corrects the soldiers of the older pictures with it. At the end it prints how far the box bottom of standing soldiers is below the feet, per box method; tight and corrected boxes should be close to 0. The dataset folder is built incrementally, so after taking new pictures **build into a new folder** (`--out dataset_v2`) or delete the old one, otherwise the older pictures keep their old labels. `--no-box-fix` turns the correction off.
+
+**Ground-point keypoint (`--pose`).** Every label line also gets one keypoint, the object's ground point (`ground_px`: a soldier's feet, the terrain under a vehicle's hull centre, an explosion's impact point; buildings and gun fire get none), and `data.yaml` gets `kpt_shape: [1, 3]`. Train it as YOLO-pose (`yolo pose train model=yolo11s-pose.pt data=output\dataset_pose\data.yaml ...`) and the detector predicts the ground point directly: localisation then no longer depends on how the box edges sit. A pose dataset is its own folder (one folder = one format).
 
 **Filters.** Pictures with more than 3 labelled buildings are left out (`--max-buildings`, `-1` keeps all), so this also cleans up older sessions. `--min-green` leaves out pictures with too little green (the share of green pixels, 0–1). `manifest.csv` lists `green_fraction`, `ground_surface` and the burst of every picture, so pick the threshold from real numbers first. A damaged or half-written PNG (e.g. after a PC crash) is skipped and counted as `broken`; the rest of the dataset is built normally.
 
@@ -338,6 +353,8 @@ Each box gives one pixel (default: bottom-centre). That pixel is turned into a r
 | 3 detector | bottom-centre of a YOLO detection matched to a label (IoU ≥ 0.5) | + the detector's error |
 
 It reports per class: CEP50 (= median horizontal error), CEP90 (90th percentile), mean, RMSE, max, and the mean error along the viewing direction and across it. It also writes `output\geoloc_eval\per_object.csv` and `summary.json`. Buildings are listed separately and left out of "ALL": for them the box bottom is not where the building stands. For YOLO predictions, run `yolo predict ... save_txt=True save_conf=True` on the dataset images; the .txt files have the same names as the images.
+
+**Keypoint.** With a YOLO-pose model (`--pose` dataset), `--anchor keypoint --pred runs\pose\predict\labels` uses the predicted ground point; step 2 then uses the labelled ground point.
 
 **Bottom vs centre.** On older pictures, the label boxes gave CEP50 ≈ 0.9 m for soldiers and ≈ 3.4 m for tanks with the bottom-centre, and ≈ 0.5 m and ≈ 1.6 m with `--anchor center`. Seen at an angle, a box's bottom edge is the *near* edge of the vehicle, not its centre. `--anchor center` uses the box centre and assumes it is half the object's height above the ground (soldier 0.9 m, vehicle 1.2 m).
 
@@ -380,6 +397,11 @@ Game settings:
 - exposure test + `pick_exposure.py`, haze correction;
 - dataset tool on a session cut off by a PC crash (broken PNGs skipped);
 - all tools run from `<mission>\tools` with outputs in `output\` (tested on a copy of real sessions).
+
+**New in this version, check on the first run:**
+1. **Tight soldier boxes:** build the dataset and read the "box bottom below the feet" lines at the end: `body_parts` should be near 0 (a few % for boots and toes); look at a few previews. If most soldiers say `hit_point_parts`, the game gave no animated body parts (still fine, a bit looser).
+2. **New scenes** (Shift+7 … Shift+0, Shift+-): press each once and look; groups down should stay kneeling / prone, the lone building should have no other house nearby.
+3. **Explosion pictures:** the smoke column should be a part of the picture, not fill it.
 
 **Check after changing things:**
 1. **HUD** missing after an update: re-open the mission in Eden (`description.ext` is only read then).

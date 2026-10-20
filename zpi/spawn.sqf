@@ -137,6 +137,7 @@ ZPI_fnc_clearScene = {
     ZPI_sceneGroups = [];
     ZPI_buildingWatch = [];
     ZPI_entrySites = [];
+    ZPI_downGroups = [];
     ZPI_hudExtra = "";
     ZPI_sceneToken = ZPI_sceneToken + 1;     // ends the helper loops of the old scene
 };

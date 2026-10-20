@@ -58,7 +58,11 @@ ZPI_cfg_minBoxPx      = 4;       // smaller boxes are dropped (px, on screen res
 ZPI_cfg_minVisible    = 0.3;     // fraction of the object visible (trees, walls, nets, terrain)
 ZPI_cfg_minInFrame    = 0.35;    // fraction of the box inside the image (cut at edges)
 ZPI_cfg_maxLabelDist  = 3000;    // m
-ZPI_cfg_soldierPad    = 0.12;    // m of padding around the soldier's body points
+ZPI_cfg_soldierPad    = 0.12;    // m of padding around the soldier's body points (one-3D-box method, also the visibility test)
+ZPI_cfg_soldierTightBox = true;  // label = union of the projected body parts (tight); false = one projected 3D box (old, loose at the bottom)
+ZPI_cfg_soldierPartPad  = 0.03;  // m around each body part (uniform, vest)
+ZPI_cfg_soldierHelmet   = 0.08;  // m added above the head (helmet)
+ZPI_cfg_soldierBackpack = 0.22;  // m added behind the back when he carries a backpack
 ZPI_cfg_vehicleClip   = 2;       // boundingBoxReal clipping: 2 = geometry (tighter, no antennas), 3 = everything
 ZPI_cfg_labelBuildings = true;   // every building in the picture gets a "building" box
 ZPI_cfg_labelsPerLine = 3;     // boxes per log line (log lines over ~1000 characters may get cut off)
@@ -97,22 +101,27 @@ ZPI_cfg_orthoOverlap = 0.2;      // fraction of tile overlap
 ZPI_cfg_orthoSettle  = 1.2;      // s to wait at each tile (terrain and objects load in)
 
 // ---- dataset generator (Home key) ---------------------------------------------------------
-ZPI_cfg_tourTarget    = 1000;    // images to generate
+ZPI_cfg_tourTarget    = 1018;    // images to generate in one run (982 + 1018 = 2000)
 ZPI_cfg_tourTime      = 1;       // index into the time presets: 1 = noon
 ZPI_cfg_tourWeather   = 0;       // index into the weather presets: 0 = clear
-// scenes per location visit (keys: 1-9, 10 = -, 11 = [, 12 = ], 13-18 = Shift+1 ... Shift+6)
-ZPI_cfg_tourScenes    = [6, 1, 2, 3, 7, 8, 9, 5, 4, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+// scenes per location visit (keys: 1-9, 10 = -, 11 = [, 12 = ], 13-22 = Shift+1 ... Shift+0, 23 = Shift+-).
+// A key listed twice is visited twice per round (new site, new layout): more tank columns (11, 17, 19),
+// patrols (5, 20, 21), lone-building entries (22) and kneeling / prone groups (23).
+ZPI_cfg_tourScenes    = [6, 1, 2, 3, 7, 8, 9, 5, 4, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+                         19, 20, 21, 22, 23,  11, 17, 19, 5, 20, 21, 22, 23];
 // images per scene visit (scene key -> count); others: 10. Building entries get the most.
 ZPI_cfg_tourShots     = createHashMapFromArray [[6, 10], [1, 10], [2, 10], [3, 10], [7, 10], [8, 10], [9, 6],
-                                                [5, 15], [4, 15], [10, 30], [11, 20], [12, 20],
-                                                [13, 25], [14, 25], [15, 30], [16, 25], [17, 20], [18, 20]];
+                                                [5, 15], [4, 15], [10, 20], [11, 20], [12, 15],
+                                                [13, 15], [14, 15], [15, 15], [16, 15], [17, 20], [18, 15],
+                                                [19, 20], [20, 15], [21, 15], [22, 25], [23, 15]];
 ZPI_cfg_tourExplosions = 1;      // explosion close-ups per scene visit
 // ONE scale for every generator picture that can contain soldiers (close-ups, groups, building
 // scenes, static vehicle scenes, tank firing, explosion close-ups): a soldier always has about
 // the same pixel size, so the detector does not have to learn many sizes of the same class.
 ZPI_cfg_tourSoldierGSD = [0.009, 0.0115]; // m/px (picture 17-22 m wide; soldier seen from 35-60 deg ~55-90 px)
 ZPI_cfg_tourGroupGSD   = ZPI_cfg_tourSoldierGSD;
-ZPI_cfg_tourExplosionGSD = [0.011, 0.014]; // explosion close-ups (a little wider so the smoke column fits)
+ZPI_cfg_tourExplosionGSD = [0.03, 0.045];  // explosion pictures: zoomed out (58-86 m wide), the smoke column is a
+                                           // part of the picture, not all of it, so the measured box fits the smoke
 ZPI_cfg_tourGroupRadius = 8;             // m: soldiers within this distance are aimed at together
 // driving columns only (no soldiers in view):
 ZPI_cfg_tourVehicleGSD = [0.025, 0.05];  // m/px for one vehicle of a driving column
@@ -125,6 +134,8 @@ ZPI_cfg_tourFrameMargin = 3;             // m around the squad in building-scene
 ZPI_cfg_tourSettle     = 3.5;            // s at a new camera position before the first picture (textures load in)
 ZPI_cfg_tourElev       = [40, 75];
 ZPI_cfg_tourElevSoldier = [35, 60];      // soldier shots: lower, so more of the soldier's height shows (straight down = only head and shoulders)
+ZPI_cfg_tourElevPatrol = [30, 45];       // walking patrols and kneeling / prone groups: flatter, more from the side
+ZPI_cfg_tourElevColumn = [30, 60];       // driving columns: from the side as well as from above
 
 // ---- exposure ------------------------------------------------------------------------------
 // Arma's automatic exposure opens up when the camera sees little sky, so a drone camera looking
@@ -166,6 +177,10 @@ ZPI_cfg_surfaceGreen   = [
 ZPI_cfg_buildingSquad   = 8;     // soldiers in the squad (- key); every building scene has at most 8
 ZPI_cfg_buildingEnter   = 4;     // how many of them go inside
 ZPI_cfg_entryStagger    = [1.2, 2.5];   // s between soldiers going through the door
+// lone-building entries (Shift+0): no other labelled building within this radius, and pictures
+// with more than ZPI_cfg_loneMaxBuildings buildings in view are not taken (1 = only that house)
+ZPI_cfg_loneRadius      = 120;   // m
+ZPI_cfg_loneMaxBuildings = 1;
 
 // ---- driving columns -------------------------------------------------------------------------
 ZPI_cfg_convoySpeed     = 20;    // km/h, slow enough that a burst shows the column moving

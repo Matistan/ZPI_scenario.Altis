@@ -101,6 +101,79 @@ ZPI_fnc_soldierBox = {
     [_mn vectorDiff [_pad, _pad, _pad], _mx vectorAdd [_pad, _pad, _pad + 0.1]]   // +0.1 m helmet
 };
 
+// ---- tight soldier box ----------------------------------------------------------------
+// The box above is ONE 3D box around the whole body; projected from an oblique drone view its
+// near-bottom corners land well below the feet (box bottom 10-40 % of the box height below the
+// ground point). The label therefore uses the body parts one by one: every bone of the visible
+// model (head, upper arm, forearm, hand, thigh, shin, foot, toes, ...) has its own small box;
+// the corners of each are projected and the 2D box is their union, which hugs the silhouette.
+// Fallback: the same with the hit-point parts (bigger, still much tighter than one 3D box).
+ZPI_soldierBones = ["head", "neck", "neck1", "spine", "spine1", "spine2", "spine3", "pelvis",
+    "leftshoulder", "leftarm", "leftforearm", "lefthand", "rightshoulder", "rightarm", "rightforearm", "righthand",
+    "leftupleg", "leftleg", "leftfoot", "lefttoebase", "rightupleg", "rightleg", "rightfoot", "righttoebase"];
+ZPI_soldierHitParts = ["head", "neck", "spine3", "pelvis", "arms", "hands", "legs", "body"];
+
+// [unit, names, LOD (index number or name)] -> [[name, mn, mx], ...] of the parts that exist
+ZPI_fnc_partBoxes = {
+    params ["_u", "_names", "_lod"];
+    private _out = [];
+    {
+        private _bb = if (_lod isEqualType 0) then {
+            selectionPosition [_u, _x, _lod, true, "BoundingBox"]
+        } else {
+            _u selectionPosition [_x, _lod, "BoundingBox"]
+        };
+        if (!isNil "_bb" && {_bb isEqualType []} && {count _bb == 2} && {(_bb select 0) isEqualType []}
+            && {(_bb select 0) isNotEqualTo (_bb select 1)}) then {
+            _out pushBack [_x, _bb select 0, _bb select 1];
+        };
+    } forEach _names;
+    _out
+};
+
+// [unit, hit-point box [mn, mx], basis, th, tv] -> [[x0, y0, x1, y1] normalized, method]
+// method "v" = bones of the visible model, "h" = hit-point parts, "" = nothing usable
+ZPI_fnc_soldierBox2D = {
+    params ["_u", "_hb", "_basis", "_th", "_tv"];
+    private _parts = [_u, ZPI_soldierBones, 0] call ZPI_fnc_partBoxes;
+    private _meth = "v";
+    // sanity: the bones must follow the animation (top of the body like the hit points, which do)
+    // and lie inside the hit-point body box (+ margin), else the pose is not the animated one
+    private _hmn = (_hb select 0) vectorAdd [ZPI_cfg_soldierPad - 0.35, ZPI_cfg_soldierPad - 0.35, ZPI_cfg_soldierPad - 0.35];
+    private _hmx = (_hb select 1) vectorAdd [0.35 - ZPI_cfg_soldierPad, 0.35 - ZPI_cfg_soldierPad, 0.25 - ZPI_cfg_soldierPad];
+    private _top = -1e9;
+    private _outside = 0;
+    {
+        _top = _top max ((_x select 2) select 2);
+        private _c = ((_x select 1) vectorAdd (_x select 2)) vectorMultiply 0.5;
+        if (((_c select 0) < (_hmn select 0)) || {(_c select 0) > (_hmx select 0)} || {(_c select 1) < (_hmn select 1)}
+            || {(_c select 1) > (_hmx select 1)} || {(_c select 2) < (_hmn select 2)} || {(_c select 2) > (_hmx select 2)}) then { _outside = _outside + 1 };
+    } forEach _parts;
+    if (count _parts < 10 || {_outside > 1} || {abs (_top - (((_hb select 1) select 2) - ZPI_cfg_soldierPad - 0.1)) > 0.45}) then {
+        _parts = [_u, ZPI_soldierHitParts, "HitPoints"] call ZPI_fnc_partBoxes;
+        _meth = "h";
+    };
+    if (count _parts < 2) exitWith { [[], ""] };
+    private _pad = ZPI_cfg_soldierPartPad;
+    private _pack = (backpack _u) != "";
+    private _x0 = 1e9; private _y0 = 1e9; private _x1 = -1e9; private _y1 = -1e9;
+    private _ok = true;
+    {
+        _x params ["_name", "_mn", "_mx"];
+        _mn = _mn vectorDiff [_pad, _pad, _pad];
+        _mx = _mx vectorAdd [_pad, _pad, _pad];
+        // gear that is not part of the body model: helmet on the head, backpack behind the back
+        if (_name == "head") then { _mx = _mx vectorAdd [0, 0, ZPI_cfg_soldierHelmet] };
+        if (_pack && {_name in ["spine2", "spine3", "body"]}) then { _mn = _mn vectorAdd [0, -ZPI_cfg_soldierBackpack, 0] };
+        private _b = [[_u, _mn, _mx] call ZPI_fnc_corners, _basis, _th, _tv] call ZPI_fnc_boxOfPoints;
+        if (_b isEqualTo []) exitWith { _ok = false };
+        _x0 = _x0 min (_b select 0); _y0 = _y0 min (_b select 1);
+        _x1 = _x1 max (_b select 2); _y1 = _y1 max (_b select 3);
+    } forEach _parts;
+    if (!_ok) exitWith { [[], ""] };
+    [[_x0, _y0, _x1, _y1], _meth]
+};
+
 // Vehicle: the box Arma reports for the whole model is often much larger than the
 // vehicle (it includes invisible helper parts). Take the box of several model LODs
 // and keep their intersection: every one of them contains the hull, so the overlap
@@ -195,15 +268,21 @@ ZPI_fnc_finishBox = {
     if (_inFrac < ZPI_cfg_minInFrame) exitWith { "" };               // mostly outside the image
     if (((_cx1 - _cx0) * _W) < ZPI_cfg_minBoxPx || {((_cy1 - _cy0) * _H) < ZPI_cfg_minBoxPx}) exitWith { "" };
     if (_vis < ZPI_cfg_minVisible) exitWith { "" };
-    _extra params ["_stance", "_p", "_dist", "_inside", "_grid", ["_g", []], ["_gn", []]];
+    _extra params ["_stance", "_p", "_dist", "_inside", "_grid", ["_g", []], ["_gn", []], ["_meth", ""], ["_old", []]];
     if (_g isEqualTo []) then { _g = _p };
     // fields 16-20: ground point (where the object stands, ASL) and its normalized image position
-    format ['["%1",%2,%3,%4,%5,%6,%7,%8,"%9",%10,%11,%12,%13,%14,"%15",%16,%17,%18,%19,%20]', _kind,
+    // field 21: soldier box method ("v" body bones, "h" hit-point parts, "" one 3D box)
+    // field 22: soldiers: the old one-3D-box label [cx, cy, w, h] (to correct pictures taken before)
+    format ['["%1",%2,%3,%4,%5,%6,%7,%8,"%9",%10,%11,%12,%13,%14,"%15",%16,%17,%18,%19,%20,"%21",%22]', _kind,
         ((_cx0 + _cx1) / 2) toFixed 5, ((_cy0 + _cy1) / 2) toFixed 5, (_cx1 - _cx0) toFixed 5, (_cy1 - _cy0) toFixed 5,
         _id, _vis toFixed 2, (1 - _inFrac) toFixed 2, _stance,
         (_p select 0) toFixed 2, (_p select 1) toFixed 2, (_p select 2) toFixed 2, _dist toFixed 1, [0, 1] select _inside, _grid,
         (_g select 0) toFixed 2, (_g select 1) toFixed 2, (_g select 2) toFixed 2,
-        ["null", (_gn select 0) toFixed 6] select (_gn isNotEqualTo []), ["null", (_gn select 1) toFixed 6] select (_gn isNotEqualTo [])]
+        ["null", (_gn select 0) toFixed 6] select (_gn isNotEqualTo []), ["null", (_gn select 1) toFixed 6] select (_gn isNotEqualTo []),
+        _meth, if (count _old == 4) then {
+            format ["[%1,%2,%3,%4]", (((_old select 0) + (_old select 2)) / 2) toFixed 5, (((_old select 1) + (_old select 3)) / 2) toFixed 5,
+                ((_old select 2) - (_old select 0)) toFixed 5, ((_old select 3) - (_old select 1)) toFixed 5]
+        } else { "null" }]
 };
 
 ZPI_fnc_computeLabels = {
@@ -222,6 +301,12 @@ ZPI_fnc_computeLabels = {
         if (_kind != "" && {!isNull _obj} && {alive _obj} && {(_cam vectorDistance (getPosASL _obj)) < ZPI_cfg_maxLabelDist}) then {
             (if (_kind == "s") then { [_obj] call ZPI_fnc_soldierBox } else { [_obj] call ZPI_fnc_vehicleBox }) params ["_mn", "_mx"];
             private _box = [[_obj, _mn, _mx] call ZPI_fnc_corners, _basis, _th, _tv] call ZPI_fnc_boxOfPoints;
+            private _old = [];
+            private _meth = "";
+            if (_kind == "s" && {_box isNotEqualTo []} && {ZPI_cfg_soldierTightBox}) then {
+                ([_obj, [_mn, _mx], _basis, _th, _tv] call ZPI_fnc_soldierBox2D) params ["_tb", "_tm"];
+                if (_tb isNotEqualTo []) then { _old = _box; _box = _tb; _meth = _tm };
+            };
             if (_box isNotEqualTo []) then {
                 // sample points: center + 4 points around it at 60 % of the box, mid height
                 private _c = (_mn vectorAdd _mx) vectorMultiply 0.5;
@@ -239,7 +324,7 @@ ZPI_fnc_computeLabels = {
                     [_bc select 0, _bc select 1, getTerrainHeightASL _bc]
                 };
                 private _gn = [_g, _basis, _th, _tv] call ZPI_fnc_projectN;
-                private _s = [_kind, _box, _id, _vis, _W, _H, [_st, _p, _cam vectorDistance _p, _inside, mapGridPosition _obj, _g, _gn]] call ZPI_fnc_finishBox;
+                private _s = [_kind, _box, _id, _vis, _W, _H, [_st, _p, _cam vectorDistance _p, _inside, mapGridPosition _obj, _g, _gn, _meth, _old]] call ZPI_fnc_finishBox;
                 if (_s != "") then { _boxes pushBack _s };
             };
         };
