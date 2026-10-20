@@ -1,0 +1,19 @@
+# Everything the Python tools make (datasets, orthophotos, sessions, evaluation)
+output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# YOLO training results and weights (large; share them separately)
+runs/
+*.pt
+*.onnx
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

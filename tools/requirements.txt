@@ -1,0 +1,3 @@
+# python -m pip install -r tools/requirements.txt
+pillow>=10
+numpy>=1.24
