@@ -77,6 +77,6 @@ ZPI_center       = [0, 0, 0];
 
     if (ZPI_cfg_startScene >= 0) then { [ZPI_cfg_startScene] call ZPI_fnc_runScene };
     // the engine resets the aperture at mission start: set the fixed exposure a moment later
-    [] spawn { sleep 1; call ZPI_fnc_loadExposure };
+    [] spawn { sleep 1; call ZPI_fnc_applyAperture };
     call ZPI_fnc_showHelp;
 };

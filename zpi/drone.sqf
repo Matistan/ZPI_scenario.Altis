@@ -58,10 +58,12 @@ ZPI_fnc_dirFromYawPitch = {
     params ["_y", "_p"];
     [(sin _y) * (cos _p), (cos _y) * (cos _p), sin _p]
 };
+
 ZPI_fnc_upFromYawPitch = {      // camera up vector, no roll
     params ["_y", "_p"];
     [-(sin _y) * (sin _p), -(cos _y) * (sin _p), cos _p]
 };
+
 ZPI_fnc_upFromDir = {           // no-roll up vector for an arbitrary view direction
     params ["_dir", ["_fallbackFwd", [0, 1, 0]]];
     private _right = _dir vectorCrossProduct [0, 0, 1];
@@ -139,7 +141,7 @@ ZPI_fnc_updateFreeCam = {
     // look: mouse deltas + arrow keys, scaled by FOV so zoomed views stay controllable
     private _sens = ZPI_cfg_mouseSens * _fovScale;
     ZPI_yaw   = ZPI_yaw + ZPI_mouseDX * _sens;
-    ZPI_pitch = ZPI_pitch - ZPI_mouseDY * _sens * ([1, -1] select ZPI_cfg_invertMouse);
+    ZPI_pitch = ZPI_pitch - ZPI_mouseDY * _sens;
     ZPI_mouseDX = 0; ZPI_mouseDY = 0;
     private _rate = ZPI_cfg_keyLookRate * _fovScale * _dt;
     if ([203] call ZPI_fnc_keyHeld) then { ZPI_yaw = ZPI_yaw - _rate };
@@ -236,7 +238,7 @@ ZPI_fnc_setCamActive = {
         cameraEffectEnableHUD false;
         ZPI_camActive = true;
         if (ZPI_cfg_frameCode) then { call ZPI_fnc_showFrameCode };
-        call ZPI_fnc_showHud;
+        if (!ZPI_quiet) then { call ZPI_fnc_showHud };
     } else {
         ZPI_cam cameraEffect ["terminate", "back"];
         call ZPI_fnc_hideFrameCode;
@@ -331,9 +333,19 @@ ZPI_fnc_wheelZoom = {             // smooth zoom with the mouse wheel
 ZPI_fnc_showFrameCode = {
     ("ZPI_frameCodeLayer" call BIS_fnc_rscLayer) cutRsc ["ZPI_FrameCode", "PLAIN", 0, false];
 };
+
 ZPI_fnc_hideFrameCode = {
     ("ZPI_frameCodeLayer" call BIS_fnc_rscLayer) cutText ["", "PLAIN"];
 };
+
+ZPI_fnc_hideHud = {
+    ("ZPI_hudLayer" call BIS_fnc_rscLayer) cutText ["", "PLAIN"];
+};
+
+ZPI_fnc_showHud = {
+    ("ZPI_hudLayer" call BIS_fnc_rscLayer) cutRsc ["ZPI_Hud", "PLAIN", 0, false];
+};
+
 ZPI_fnc_updateFrameCode = {
     private _d = uiNamespace getVariable ["ZPI_frameCodeDisplay", displayNull];
     if (isNull _d) exitWith {};
@@ -454,6 +466,7 @@ ZPI_fnc_showHud = {
     if (!ZPI_cfg_hud) exitWith {};
     ("ZPI_hudLayer" call BIS_fnc_rscLayer) cutRsc ["ZPI_Hud", "PLAIN", 0, false];
 };
+
 ZPI_fnc_hideHud = {
     ("ZPI_hudLayer" call BIS_fnc_rscLayer) cutText ["", "PLAIN"];
 };
@@ -465,8 +478,14 @@ ZPI_hudGround = "---";
 ZPI_fnc_updateHud = {
     private _d = uiNamespace getVariable ["ZPI_hudDisplay", displayNull];
     if (isNull _d) exitWith {};
-    if (ZPI_quiet) exitWith { (_d displayCtrl 1200) ctrlSetText ""; { (_d displayCtrl _x) ctrlShow false } forEach [1201, 1202, 1203, 1204] };
-    { (_d displayCtrl _x) ctrlShow true } forEach [1201, 1202, 1203, 1204];
+    if (ZPI_quiet) exitWith {
+        (_d displayCtrl 1200) ctrlSetText "";
+        {
+            (_d displayCtrl _x) ctrlShow false
+        } forEach [1201, 1202, 1203, 1204] };
+    {
+        (_d displayCtrl _x) ctrlShow true
+    } forEach [1201, 1202, 1203, 1204];
     (call ZPI_fnc_attitude) params ["_hdg", "_pitch"];
     private _gz  = (getTerrainHeightASL ZPI_camPosASL) max 0;
     private _alt = ZPI_camPosASL select 2;

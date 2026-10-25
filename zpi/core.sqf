@@ -13,14 +13,17 @@ ZPI_fnc_rand = {                 // [max] -> [0, max)
     private _s = floor (((ZPI_cfg_seed * 997) + (ZPI_rngCounter * 131)) mod 16777000);
     ((_s random 1) min 0.999999) * _max
 };
+
 ZPI_fnc_randRange = {            // [a, b] -> [a, b)
     params ["_a", "_b"];
     _a + ([_b - _a] call ZPI_fnc_rand)
 };
+
 ZPI_fnc_randInt = {              // [n] -> 0 .. n-1
     params ["_n"];
     floor ([_n] call ZPI_fnc_rand)
 };
+
 ZPI_fnc_pick = {                 // [array] -> element
     params ["_arr"];
     _arr select ([count _arr] call ZPI_fnc_randInt)
@@ -37,6 +40,7 @@ ZPI_fnc_rel = {
         0
     ]
 };
+
 ZPI_fnc_angDiff = {              // signed difference b - a in (-180, 180]
     params ["_a", "_b"];
     ((((_b - _a) mod 360) + 540) mod 360) - 180
@@ -75,7 +79,7 @@ ZPI_fnc_event = {
         diag_frameNo toFixed 0, time toFixed 3, _kind, ZPI_sceneName, ZPI_cfg_seed, ZPI_regionId, _data]] call ZPI_fnc_emit;
 };
 
-// On-screen messages go into the camera image, so they can be silenced (Q).
+// On-screen messages go into the camera image, so they can be silenced (U).
 ZPI_quiet = false;
 ZPI_fnc_msg = {
     params ["_text"];

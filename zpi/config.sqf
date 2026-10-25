@@ -41,8 +41,7 @@ ZPI_cfg_scanRadius   = 150;      // m, radius of the "scan" gimbal sweep on the 
 ZPI_cfg_scanRate     = 12;       // deg/s of the sweep angle
 
 // ---- free camera (V switches free <-> drone) ------------------------------------
-ZPI_cfg_mouseSens     = 40;      // deg per mouse unit at 60 deg FOV (scaled down when zoomed in)
-ZPI_cfg_invertMouse   = false;
+ZPI_cfg_mouseSens     = 0.02;      // deg per mouse unit at 60 deg FOV (scaled down when zoomed in)
 ZPI_cfg_keyLookRate   = 60;      // deg/s for arrow-key look at 60 deg FOV
 ZPI_cfg_freeMinSpeed  = 10;      // m/s; speed grows with height above ground ...
 ZPI_cfg_freeMaxSpeed  = 200;     // ... up to this
@@ -138,14 +137,7 @@ ZPI_cfg_tourElevPatrol = [30, 45];       // walking patrols and kneeling / prone
 ZPI_cfg_tourElevColumn = [30, 60];       // driving columns: from the side as well as from above
 
 // ---- exposure ------------------------------------------------------------------------------
-// Arma's automatic exposure opens up when the camera sees little sky, so a drone camera looking
-// down at sunlit ground comes out over-exposed and washed out. At noon in clear weather (the
-// generator's light) a fixed exposure is used instead: ZPI_cfg_aperture in zpi\exposure.sqf.
-// Find the value once: press End in the mission (exposure test, ~20 s), then run
-//     python tools/pick_exposure.py
-// which writes zpi\exposure.sqf; the mission reloads it when the generator starts (Home).
-ZPI_cfg_aperture       = -1;     // -1 = automatic; overwritten by zpi\exposure.sqf
-ZPI_cfg_apertureTest   = [40, 55, 70, 85, 100, 120, 150, 190, 240, 300];   // higher = darker
+ZPI_cfg_aperture = 180;   // higher = darker
 
 // ---- bursts: the camera stays put and shoots every N seconds ------------------------------
 // Movement shows up between the pictures of one burst; then the camera moves on.

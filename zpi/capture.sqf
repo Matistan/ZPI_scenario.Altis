@@ -576,8 +576,10 @@ ZPI_fnc_doCapture = {
     private _bank  = (_r select 2) atan2 (_u select 2);
     private _gz = (getTerrainHeightASL _o) max 0;
     private _res = getResolution;
-    private _W = _res select 0; private _H = _res select 1;
-    private _th = tan (ZPI_hfov / 2); private _tv = tan (ZPI_vfov / 2);
+    private _W = _res select 0;
+    private _H = _res select 1;
+    private _th = tan (ZPI_hfov / 2);
+    private _tv = tan (ZPI_vfov / 2);
     private _n = ZPI_cfg_labelsPerLine;
     private _parts = (ceil ((count _boxes) / _n)) max 1;
 
@@ -600,7 +602,7 @@ ZPI_fnc_doCapture = {
         ZPI_scaleLock, ZPI_targetGSD toFixed 4, _ref, call ZPI_fnc_occupancyJson,
         [-1, ZPI_burstId] select (ZPI_burstIdx >= 0), ZPI_burstIdx, ZPI_burstLen,
         if (ZPI_laserRange > 0) then { surfaceType ZPI_laserPos } else { "" },
-        str fogParams, overcast toFixed 3, missionNamespace getVariable ["ZPI_cfg_aperture", -1]]] call ZPI_fnc_emit;
+        str fogParams, overcast toFixed 3, ZPI_cfg_aperture]] call ZPI_fnc_emit;
 
     [_jsonName, _basis, _th, _tv] call ZPI_fnc_logTerrain;   // DEM patch under the view
     [_jsonName, _basis, _th, _tv] call ZPI_fnc_logRays;      // what each of 9 x 5 image points really hits

@@ -17,8 +17,7 @@ ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br
     + "B barrage where you look<br/>"
     + "I auto-shot on explosions on/off<br/>"
     + "Z orthophoto of the scene area<br/>"
-    + "Home dataset generator: makes ZPI_cfg_tourTarget images by itself (Home stops)<br/>"
-    + "End exposure test (then run tools/pick_exposure.py)<br/><br/>"
+    + "Home dataset generator: makes ZPI_cfg_tourTarget images by itself (Home stops)<br/><br/>"
     + "<t color='#ffd27a'>SCENES</t>  1-9, 0<br/>"
     + "1 checkpoint &#160; 2 column &#160; 3 dug-in<br/>"
     + "4 convoy &#160; 5 patrols &#160; 6 tank platoon<br/>"
@@ -30,6 +29,7 @@ ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br
     + "Shift+7 long armour column &#160; Shift+8 patrol across fields<br/>"
     + "Shift+9 patrol on a road &#160; Shift+0 lone building entry<br/>"
     + "Shift+- groups kneeling / prone<br/>"
+    + "Shift+[ tank escort<br/>"
     + "N new layout &#160; X clear &#160; L next location<br/>"
     + "C scene to where you look &#160; J camera to scene<br/>"
     + "Alt+click on map: move scene there<br/><br/>"
@@ -66,7 +66,7 @@ ZPI_fnc_onKey = {
     params ["_disp", "_key", "_shift", "_ctrl", "_alt"];
     if (_ctrl || _alt || visibleMap || dialog) exitWith { false };
     if (!ZPI_camActive) exitWith { false };
-    if (ZPI_orthoRunning || {ZPI_expTestRunning}) exitWith { true };   // no input during the orthophoto flight / exposure test
+    if (ZPI_orthoRunning) exitWith { true };   // no input during the orthophoto flight
     if (ZPI_tourRunning && {_key != 199} && {_key != 22} && {_key != 35}) exitWith { true };   // tour: only Home, U, H
     ZPI_keysDown set [_key, true];
     private _free = ZPI_camMode == "free";
@@ -86,6 +86,7 @@ ZPI_fnc_onKey = {
     // tanks firing, long armour column, patrol across fields, patrol on a road, lone building; Shift+- groups down
     if (_shift && {_key in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]}) exitWith { [_key + 11] call ZPI_fnc_runScene; true };
     if (_shift && {_key == 12}) exitWith { [23] call ZPI_fnc_runScene; true };
+    if (_shift && {_key == 26}) exitWith { [24] call ZPI_fnc_runScene; true };
     private _handled = true;
     switch (_key) do {
         case 2:  { [1] call ZPI_fnc_runScene };
@@ -111,7 +112,6 @@ ZPI_fnc_onKey = {
             else { [] spawn ZPI_fnc_tourDataset };
         };
         case 48: { call ZPI_fnc_barrage };                                  // B
-        case 207: { [] spawn ZPI_fnc_exposureTest };                        // End: exposure test
         case 47: { [["drone", "free"] select (ZPI_camMode == "drone")] call ZPI_fnc_setCamMode };   // V
         case 49: {                                                          // N
             ZPI_cfg_seed = ZPI_cfg_seed + 1;
@@ -148,9 +148,15 @@ ZPI_fnc_onKey = {
             if (ZPI_cfg_frameCode) then { call ZPI_fnc_showFrameCode } else { call ZPI_fnc_hideFrameCode };
         };
         case 22: {                                                          // U
-            ["Quiet mode on: no text on screen"] call ZPI_fnc_msg;
             ZPI_quiet = !ZPI_quiet;
-            ["Quiet mode off"] call ZPI_fnc_msg;
+            showChat !ZPI_quiet;
+            if (ZPI_quiet) then {
+                call ZPI_fnc_hideHud;
+                ("ZPI_msgLayer" call BIS_fnc_rscLayer) cutText ["", "PLAIN"];
+            } else {
+                call ZPI_fnc_showHud;
+                ["Quiet mode off"] call ZPI_fnc_msg;
+            };
             hintSilent "";
         };
         case 35: { call ZPI_fnc_showHelp };                                 // H
@@ -165,7 +171,7 @@ ZPI_fnc_initKeys = {
     _d displayAddEventHandler ["KeyUp",   { _this call ZPI_fnc_onKeyUp }];
     _d displayAddEventHandler ["MouseMoving", {
         params ["_disp", "_dx", "_dy"];
-        if (ZPI_camActive && {ZPI_camMode == "free"} && {!visibleMap} && {!dialog} && {!ZPI_tourRunning} && {!ZPI_expTestRunning}) then {
+        if (ZPI_camActive && {ZPI_camMode == "free"} && {!visibleMap} && {!dialog} && {!ZPI_tourRunning}) then {
             ZPI_mouseDX = ZPI_mouseDX + _dx;
             ZPI_mouseDY = ZPI_mouseDY + _dy;
         };

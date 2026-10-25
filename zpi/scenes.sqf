@@ -823,6 +823,76 @@ ZPI_fnc_scene_groupsDown = {
 };
 ZPI_downGroups = [];
 
+// ---------------------------------------------------------------------
+// Shift+[ - tank escort: 6 soldiers run forward beside a tank, then split into
+//           two groups of 3 that walk on either side of the tank as it drives on.
+//           The tank keeps level with the soldiers so everything fits in one frame.
+// ---------------------------------------------------------------------
+ZPI_fnc_scene_tankEscort = {
+    params ["_c"];
+    private _p = [_c, 350] call ZPI_fnc_findOpen;
+    private _h = [360] call ZPI_fnc_rand;
+    private _side = [-1, 1] select (([1] call ZPI_fnc_rand) < 0.5);        // tank on the left or right
+    private _tank = [[ZPI_fac get "tracked"] call ZPI_fnc_pick, [_p, _h, _side * 9, -2] call ZPI_fnc_rel, _h, true] call ZPI_fnc_spawnVehicle;
+    private _tg = group (effectiveCommander _tank);
+    _tg setSpeedMode "NORMAL";
+    _tank limitSpeed 12;
+    [_tg, [[_p, _h, _side * 9, 100] call ZPI_fnc_rel], false] call ZPI_fnc_addWaypoints;
+    private _g = [ZPI_side] call ZPI_fnc_newGroup;
+    for "_j" from 0 to 5 do {
+        [_g, [_p, _h, ((_j mod 3) - 1) * 3 + ([-0.5, 0.5] call ZPI_fnc_randRange), -3 * floor (_j / 3)] call ZPI_fnc_rel, _h, "UP", false] call ZPI_fnc_spawnSoldier;
+    };
+    _g setFormation "WEDGE";
+    _g setBehaviour "AWARE";                // AWARE + FULL = they run
+    _g setSpeedMode "FULL";
+    _g setCombatMode "BLUE";
+    private _rally = [_p, _h, 0, 100] call ZPI_fnc_rel;
+    [_g, [_rally], false] call ZPI_fnc_addWaypoints;
+    ["tank_escort", format ['{"soldiers":6,"tank_side":%1,"heading":%2,"start":%3}', _side, _h toFixed 0, [_p, 1] call ZPI_fnc_v3]] call ZPI_fnc_event;
+    // pacing: every 0.5 s match the tank's speed to the soldiers' and pull it back level with them
+    [_tank, units _g, _p, _h, ZPI_sceneToken] spawn {
+        params ["_tank", "_men", "_p", "_h", "_tok"];
+        private _fwd = { params ["_q"]; ((_q select 0) - (_p select 0)) * (sin _h) + ((_q select 1) - (_p select 1)) * (cos _h) };
+        private _last = -1;
+        while { ZPI_sceneToken == _tok && {alive _tank} } do {
+            private _alive = _men select { alive _x };
+            if (_alive isEqualTo []) exitWith {};
+            private _m = 0;
+            { _m = _m + ([getPosATL _x] call _fwd) } forEach _alive;
+            _m = _m / (count _alive);
+            private _v = if (_last < 0) then { 12 } else { ((_m - _last) / 0.5) * 3.6 };   // soldiers' km/h
+            _last = _m;
+            private _lead = ([getPosATL _tank] call _fwd) - _m;                        // m ahead of them
+            _tank limitSpeed ((_v - 0.8 * _lead) max 2 min 25);
+            sleep 0.5;
+        };
+    };
+    [_g, _tank, _tg, _p, _h, _rally, ZPI_sceneToken] spawn {
+        params ["_g", "_tank", "_tg", "_p", "_h", "_rally", "_tok"];
+        private _t = time + 20;
+        waitUntil { sleep 0.5; ZPI_sceneToken != _tok || {time > _t} || {((leader _g) distance2D _rally) < 15} };
+        if (ZPI_sceneToken != _tok) exitWith {};        // scene was cleared / replaced
+        private _g2 = [side _g] call ZPI_fnc_newGroup;
+        ((units _g) select [3, 3]) joinSilent _g2;
+        {
+            private _grp = _x;
+            private _off = [-12, 12] select _forEachIndex;
+            for "_w" from (count waypoints _grp) - 1 to 0 step -1 do { deleteWaypoint [_grp, _w] };
+            _grp setFormation "WEDGE";
+            _grp setBehaviour "AWARE";
+            _grp setSpeedMode "NORMAL";
+            _grp setCombatMode "BLUE";
+            [_grp, [[_p, _h, _off, 130] call ZPI_fnc_rel, [_p, _h, _off, 350] call ZPI_fnc_rel], false] call ZPI_fnc_addWaypoints;
+            _grp setCurrentWaypoint [_grp, 1];
+        } forEach [_g, _g2];
+        for "_w" from (count waypoints _tg) - 1 to 0 step -1 do { deleteWaypoint [_tg, _w] };
+        [_tg, [[_p, _h, 0, 130] call ZPI_fnc_rel, [_p, _h, 0, 350] call ZPI_fnc_rel], false] call ZPI_fnc_addWaypoints;
+        _tg setCurrentWaypoint [_tg, 1];
+        ["split", '{"groups":2,"size":3}'] call ZPI_fnc_event;
+        ["Squad split into two groups of 3, tank drives between them"] call ZPI_fnc_msg;
+    };
+};
+
 // index = number key (10 = minus, 11 = [, 12 = ], 13-22 = Shift+1 ... Shift+0, 23 = Shift+minus)
 ZPI_scenes = [
     ["mixed",             ZPI_fnc_scene_mixed],
@@ -848,7 +918,8 @@ ZPI_scenes = [
     ["patrol_field",      ZPI_fnc_scene_patrolField],
     ["patrol_road",       ZPI_fnc_scene_patrolRoad],
     ["building_lone",     ZPI_fnc_scene_lone],
-    ["groups_down",       ZPI_fnc_scene_groupsDown]
+    ["groups_down",       ZPI_fnc_scene_groupsDown],
+    ["tank_escort",       ZPI_fnc_scene_tankEscort]
 ];
 
 ZPI_fnc_runScene = {

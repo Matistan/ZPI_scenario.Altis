@@ -33,7 +33,6 @@ ZPI_scenario.Altis\           mission folder = repository root (any name ending 
   .gitignore                  keeps output\, Python caches and trained models out of git
   zpi\                        script's source code
     config.sqf                everything you will want to tweak
-    exposure.sqf              fixed camera exposure, written by tools\pick_exposure.py (per PC)
     scenes.sqf                the 24 scenes (23 in the generator + "mixed")
     tour.sqf                  Home key: the dataset generator (sites, bursts, zoom, firing, explosions)
     sites.sqf                 where scenes go: green ground, few buildings, buildings a squad can enter
@@ -41,14 +40,13 @@ ZPI_scenario.Altis\           mission folder = repository root (any name ending 
     capture.sqf               P key: freeze, screenshot, labels, terrain grid; explosion and gun-fire pictures
     ortho.sqf                 Z key: orthophoto tile flight
     spawn.sqf                 spawning, object registry, road/terrain queries
-    env.sqf                   locations, time of day, weather, exposure, exposure test, artillery barrage
+    env.sqf                   locations, time of day, weather, exposure, artillery barrage
     core.sqf                  shared helpers (logging, JSON, random)
     keys.sqf                  controls
   tools\                      Python tools (run them from the mission folder, see below)
     make_yolo_dataset.py      screenshots + logs -> YOLO dataset, per-screenshot JSON, previews, Roboflow zip
     eval_geolocation.py       localisation error from the camera model + terrain grid (CEP50/90)
     make_ortho.py             orthophoto tiles -> one map (PNG + world file) + map with soldiers
-    pick_exposure.py          reads the in-game exposure test, writes zpi\exposure.sqf
     zpi_enhance.py            haze correction (used by the dataset tool; also for live frames)
     clean_start.py            deletes outputs, screenshots and old logs to start from clean folders
     rpt_extract.py            logs -> per-session telemetry / ground truth JSONL (also live over UDP)
@@ -116,7 +114,6 @@ The readout and the crosshair are UI, so they never appear in **P** screenshots:
 | **I** | automatic screenshot when an explosion happens on screen, on/off (default on) |
 | **Z** | orthophoto of the scene area (takes about a minute; no input during the flight) |
 | **Home** | **dataset generator**: makes 1000 labelled images by itself (clear weather, noon). Home again stops it |
-| **End** | **exposure test** for the fixed exposure (see Screenshot quality) |
 
 **Scenes.**
 
@@ -368,11 +365,7 @@ Every frame the mission logs the camera pose, measured FOV, laser range and plat
 
 **Why the pictures looked washed out.** Arma's automatic exposure opens up when the camera sees little sky. A drone camera looking down at sunlit ground therefore comes out over-exposed (average brightness ~190 of 255, burnt-out highlights). Flat noon light and distance haze add a grey-white veil on top. Three fixes:
 
-1. **Fixed exposure (in the game).** Start a scene (e.g. **6**) and press **End**. The camera moves to a generator-like view of a soldier (200 m, 50° down, close-up zoom) and takes the same picture at 10 aperture values plus automatic (~30 s, don't touch anything). Then run:
-   ```
-   python tools\pick_exposure.py
-   ```
-   It measures the pictures and picks the value with mid-grey brightness and no burnt-out highlights, or keeps automatic exposure when that is best. It writes the value to the mission's `zpi\exposure.sqf` and saves `exposure_test.jpg` in the screenshot folder, with all pictures side by side, so you can check the choice. Press **Home** and the generator loads the new value; no restart needed. The fixed exposure is only used at the generator's light (noon, clear); other times and weather keep automatic exposure. Do this once (again after changing graphics settings). `--value 30` writes a value of your choice.
+1. **Fixed exposure.** A fixed exposure is used at noon in clear weather; raise it if pictures are too bright, lower it if too dark.
 2. **Closer camera, more loading time.** The generator films from 120–300 m (columns 220–450 m) and waits 3.5 s at each new position before the first picture, so the sharp ground textures have loaded (`ZPI_cfg_tourDist`, `ZPI_cfg_tourSettle`).
 3. **Haze correction (dataset tool, default on).** `make_yolo_dataset.py` takes the remaining veil off each picture: black point at the haze level, a common white point (colours stay natural), mid-grey brightness at a fixed level and a slight colour lift. Labels are unchanged, and each JSON says `"haze_corrected": true`. `--no-enhance` copies the screenshots unchanged. **Use the same correction on live frames** before detection, so the detector sees what it was trained on:
    ```python
@@ -394,7 +387,7 @@ Game settings:
 - dataset generator: green sites, ≤ 3 buildings, bursts, building scenes with 8 soldiers (4 go in), one soldier scale;
 - tank firing: automatic pictures with measured `tank_fire` boxes, in the tour and with **K**;
 - explosions: measured boxes on real pairs (smoke column above the impact point);
-- exposure test + `pick_exposure.py`, haze correction;
+- exposure test, haze correction;
 - dataset tool on a session cut off by a PC crash (broken PNGs skipped);
 - all tools run from `<mission>\tools` with outputs in `output\` (tested on a copy of real sessions).
 

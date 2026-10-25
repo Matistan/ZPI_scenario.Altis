@@ -27,75 +27,24 @@ ZPI_fnc_setCenter = {
     if (ZPI_currentScene >= 0) then { [ZPI_currentScene] call ZPI_fnc_runScene };
 };
 
+// Set the next location from the ZPI_locations list
 ZPI_fnc_nextLocation = {
     private _i = (ZPI_regionId max -1) + 1;
     if (_i >= count ZPI_locations) then { _i = 0 };
     [ZPI_locations select _i, _i] call ZPI_fnc_setCenter;
 };
 
-// ---- exposure: fixed aperture at the generator's light (noon, clear), automatic otherwise ----
 ZPI_fnc_applyAperture = {
-    private _a = missionNamespace getVariable ["ZPI_cfg_aperture", -1];
+    private _a = ZPI_cfg_aperture;
     if (_a > 0 && {ZPI_timeIndex == ZPI_cfg_tourTime} && {ZPI_weatherIndex == ZPI_cfg_tourWeather}) then {
         setAperture _a;
     } else {
         setAperture -1;
     };
 };
-ZPI_fnc_loadExposure = {         // re-read zpi\exposure.sqf (written by tools/pick_exposure.py)
-    call compile preprocessFileLineNumbers "zpi\exposure.sqf";
-    call ZPI_fnc_applyAperture;
-    ["exposure", format ['{"aperture":%1}', ZPI_cfg_aperture]] call ZPI_fnc_event;
-};
-
-// End key: the same view at every aperture in ZPI_cfg_apertureTest (noon, clear), so
-// tools/pick_exposure.py can pick the best one from the pictures.
-ZPI_expTestRunning = false;
-ZPI_fnc_exposureTest = {
-    if (ZPI_tourRunning || {ZPI_expTestRunning}) exitWith {};
-    ZPI_expTestRunning = true;
-    ZPI_timeIndex = ZPI_cfg_tourTime;       call ZPI_fnc_applyTime;
-    ZPI_weatherIndex = ZPI_cfg_tourWeather; call ZPI_fnc_applyWeather;
-    // same camera as the generator: a soldier (or anything in the scene) from ~200 m, 50 deg down,
-    // soldier close-up zoom. Without a scene: the current view.
-    private _men = (ZPI_entities select { !isNull (_x select 1) && {(_x select 1) isKindOf "Man"} }) apply { _x select 1 };
-    private _all = (ZPI_entities select { !isNull (_x select 1) }) apply { _x select 1 };
-    private _t = if (_men isNotEqualTo []) then { _men select 0 } else { _all param [0, objNull] };
-    if (!isNull _t) then {
-        ZPI_scaleLock = true;
-        ZPI_targetGSD = (ZPI_cfg_tourSoldierGSD select 0) max 0.009;
-        [(getPosASL _t) vectorAdd [0, 0, 1], random 360, 50, 200] call ZPI_fnc_tourAim;
-    } else {
-        ["Exposure test: no scene, using the current view (start a scene first for a generator-like view)"] call ZPI_fnc_msg;
-    };
-    [format ["Exposure test: %1 pictures, do not move (~%2 s)", (count ZPI_cfg_apertureTest) + 1, round (1.6 * (count ZPI_cfg_apertureTest) + 9)]] call ZPI_fnc_msg;
-    sleep ZPI_cfg_tourSettle;                // zoom settles, textures load
-    ZPI_camLock = true;
-    ZPI_fovLock = true;
-    sleep 0.5;
-    {
-        setAperture _x;
-        sleep 1.2;
-        private _file = format ["exposure_A%1_%2.png", _x, [diag_frameNo, 8] call ZPI_fnc_pad];
-        screenshot format ["zpi\%1\%2", ZPI_sessionTag, _file];
-        ["exposure_test", format ['{"image":"zpi/%1/%2","aperture":%3}', ZPI_sessionTag, _file, _x]] call ZPI_fnc_event;
-        sleep 0.4;
-    } forEach ZPI_cfg_apertureTest;
-    setAperture -1;                          // automatic, for comparison
-    sleep 3;
-    screenshot format ["zpi\%1\exposure_Aauto_%2.png", ZPI_sessionTag, [diag_frameNo, 8] call ZPI_fnc_pad];
-    sleep 0.4;
-    call ZPI_fnc_applyAperture;
-    ZPI_camLock = false;
-    ZPI_fovLock = false;
-    ZPI_mouseDX = 0; ZPI_mouseDY = 0;
-    ZPI_lastTick = diag_tickTime;
-    ZPI_expTestRunning = false;
-    ["Exposure test done. Now run:  python tools/pick_exposure.py   (then Home uses the new exposure)"] call ZPI_fnc_msg;
-};
 
 // ---- time of day -------------------------------------------------------------
-ZPI_timePresets = [[6, 0, "dawn"], [12, 0, "noon"], [17, 30, "afternoon"], [20, 30, "dusk"], [23, 0, "night"]];
+ZPI_timePresets = [[6, 0, "dawn"], [12, 0, "noon"], [17, 30, "afternoon"], [23, 0, "night"]];
 ZPI_timeIndex = 1;
 ZPI_fnc_applyTime = {
     (ZPI_timePresets select ZPI_timeIndex) params ["_hh", "_mm", "_label"];
@@ -104,6 +53,7 @@ ZPI_fnc_applyTime = {
     call ZPI_fnc_applyAperture;
     [format ["Time: %1 (%2:%3%4)", _label, _hh, ["", "0"] select (_mm < 10), _mm]] call ZPI_fnc_msg;
 };
+
 ZPI_fnc_nextTime = {
     ZPI_timeIndex = (ZPI_timeIndex + 1) mod (count ZPI_timePresets);
     call ZPI_fnc_applyTime;
@@ -127,6 +77,7 @@ ZPI_fnc_applyWeather = {
     call ZPI_fnc_applyAperture;
     [format ["Weather: %1", _label]] call ZPI_fnc_msg;
 };
+
 ZPI_fnc_nextWeather = {
     ZPI_weatherIndex = (ZPI_weatherIndex + 1) mod (count ZPI_weatherPresets);
     call ZPI_fnc_applyWeather;
