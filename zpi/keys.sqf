@@ -43,9 +43,9 @@ ZPI_fnc_showHelp = {
 };
 
 ZPI_fnc_status = {
-    [format ["alt %1 m, radius %2 m, gimbal %3, FOV %4 deg (measured %5)",
+    [format ["alt %1 m, radius %2 m, gimbal %3, FOV %4 deg",
         ZPI_cfg_orbitAlt, ZPI_cfg_orbitRadius, ZPI_gimbalModes select ZPI_gimbalIndex,
-        ZPI_fovTarget toFixed 1, ZPI_hfov toFixed 2]] call ZPI_fnc_msg;
+        ZPI_hfov toFixed 1]] call ZPI_fnc_msg;
 };
 
 ZPI_fnc_orbitEvent = {

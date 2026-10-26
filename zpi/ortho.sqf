@@ -19,11 +19,10 @@ ZPI_orthoRunning = false;
 ZPI_fnc_orthoCapture = {
     if (ZPI_orthoRunning) exitWith { ["Orthophoto already running"] call ZPI_fnc_msg };
     if (ZPI_capState > 0 || {ZPI_camLock} || {!ZPI_camActive}) exitWith { ["Busy (capture in progress), try again"] call ZPI_fnc_msg };
-    if (ZPI_fovK <= 0) exitWith { ["Camera FOV not measured yet, try again in a second"] call ZPI_fnc_msg };
     ZPI_orthoRunning = true;
     [] spawn {
         // ---- save the current view, hold everything still ----
-        private _saved = [ZPI_camPosASL, ZPI_camDir, ZPI_camUp, ZPI_yaw, ZPI_pitch, ZPI_fovTarget, ZPI_scaleLock, ZPI_autoCapture, ZPI_firefight];
+        private _saved = [ZPI_camPosASL, ZPI_camDir, ZPI_camUp, ZPI_yaw, ZPI_pitch, ZPI_hfov, ZPI_scaleLock, ZPI_autoCapture, ZPI_firefight];
         ZPI_camLock = true;
         ZPI_scaleLock = false;
         ZPI_autoCapture = false;
@@ -34,10 +33,8 @@ ZPI_fnc_orthoCapture = {
             if (!isNull _o && {simulationEnabled _o}) then { _o enableSimulation false; _frozen pushBack _o };
         } forEach ZPI_entities;
 
-        // ---- zoom to the tile FOV and wait until it is measured ----
-        [ZPI_cfg_orthoFov] call ZPI_fnc_requestFov;
-        private _t0 = time;
-        waitUntil { (ZPI_fovCheckFrame < 0 && {abs (ZPI_hfov - ZPI_cfg_orthoFov) < 0.2}) || {time > _t0 + 3} };
+        // ---- zoom to the tile FOV ----
+        [ZPI_cfg_orthoFov] call ZPI_fnc_setFov;
 
         // ---- tile grid ----
         private _c = ZPI_center;
@@ -102,7 +99,7 @@ ZPI_fnc_orthoCapture = {
         _saved params ["_pos", "_dir", "_up", "_yaw", "_pitch", "_fov", "_lock", "_auto", "_fight"];
         ZPI_camPosASL = _pos; ZPI_camDir = _dir; ZPI_camUp = _up; ZPI_yaw = _yaw; ZPI_pitch = _pitch;
         call ZPI_fnc_applyCamPose;
-        [_fov] call ZPI_fnc_requestFov;
+        [_fov] call ZPI_fnc_setFov;
         ZPI_scaleLock = _lock;
         ZPI_autoCapture = _auto;
         if (_fight) then { call ZPI_fnc_toggleFirefight };

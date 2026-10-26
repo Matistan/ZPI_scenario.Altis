@@ -16,12 +16,11 @@ ZPI_cfg_orbitSpeed   = 35;       // m/s (MQ-4A loiter speed range)
 ZPI_cfg_camBelowDrone = 1.5;     // gimbal offset below the airframe, m
 
 // ---- camera ------------------------------------------------------------
-// Horizontal FOV presets in degrees (PgUp / PgDn). The script measures the
-// real FOV every frame and steers camSetFov until it matches the preset.
+// Horizontal FOV presets in degrees (PgUp / PgDn). camSetFov is computed from the preset.
 // Steps modelled on real drone gimbals (horizontal FOV): small-UAS wide camera ~75 deg,
 // MALE-class EO zoom (e.g. WESCAM MX-15) about 31 down to 1.2 deg.
 ZPI_cfg_fovPresets   = [75, 45, 30, 15, 8, 4, 2, 1.2];
-ZPI_cfg_fovIndex     = 2;        // start at 30 deg
+ZPI_cfg_startFov     = 30;       // deg, horizontal FOV at mission start
 
 
 // ---- constant pixel size (R toggles): zoom follows the laser range ---------------------
@@ -41,7 +40,7 @@ ZPI_cfg_scanRadius   = 150;      // m, radius of the "scan" gimbal sweep on the 
 ZPI_cfg_scanRate     = 12;       // deg/s of the sweep angle
 
 // ---- free camera (V switches free <-> drone) ------------------------------------
-ZPI_cfg_mouseSens     = 0.02;      // deg per mouse unit at 60 deg FOV (scaled down when zoomed in)
+ZPI_cfg_mouseSens     = 0.05;    // deg per mouse unit at 60 deg FOV (scaled down when zoomed in)
 ZPI_cfg_keyLookRate   = 60;      // deg/s for arrow-key look at 60 deg FOV
 ZPI_cfg_freeMinSpeed  = 10;      // m/s; speed grows with height above ground ...
 ZPI_cfg_freeMaxSpeed  = 200;     // ... up to this
@@ -182,7 +181,7 @@ ZPI_cfg_telemetryEvery = 1;      // telemetry every N frames (0 = off)
 ZPI_cfg_gtEvery        = 10;     // ground-truth positions every N frames (0 = off)
 ZPI_cfg_gtMaxPerLine   = 12;     // objects per log line (keeps RPT lines short)
 ZPI_cfg_frameCode      = true;   // 24-bit frame-number bar in the top-left corner
-ZPI_cfg_useExtension   = false;  // true once the telemetry DLL exists (module 2)
+ZPI_cfg_useExtension   = false;  // true once the telemetry DLL exists
 ZPI_cfg_extensionName  = "zpi_telemetry";
 
 // ---- world -----------------------------------------------------------------

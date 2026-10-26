@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Localisation error of "pixel -> world" (module 6) on the Arma dataset, split by error source.
+Localisation error of "pixel -> world" on the Arma dataset, split by error source.
 
 For every object in every picture the box's bottom-centre pixel is turned into a ray of the
 pinhole camera (camera pose + FOV from the picture's JSON) and intersected with the terrain

@@ -276,7 +276,7 @@ There is one file per screenshot, with the same name as the image:
 
 `world_pos_asl` uses Arma map metres: x = east, y = north, z = height above sea level. This is the same coordinate system as the orthophoto and its world file, so detected objects can be placed directly on the map.
 
-**Geometry for localisation (module 6).** Every picture also has:
+**Geometry for localisation.** Every picture also has:
 
 | Field | What it is |
 |---|---|
@@ -332,7 +332,7 @@ python tools\make_yolo_dataset.py --out dataset_pose --pose     # YOLO-pose labe
 
 The output in `output\dataset\` is: `images/`, `labels/`, `data.yaml`, `meta/` (JSON per screenshot), `previews/` (check these!), `manifest.csv` and `scheme.txt`. The split goes by location marker (region) when there are 2 or more regions, otherwise by scene instance. For Roboflow: don't re-split, and don't resize to 640.
 
-## Localisation error (module 6)
+## Localisation error
 
 ```bash
 python tools\eval_geolocation.py                                        # output\dataset, steps 1 + 2
@@ -357,9 +357,9 @@ It reports per class: CEP50 (= median horizontal error), CEP90 (90th percentile)
 
 Pictures taken before this version have no terrain grid and no ground points. The tool then intersects each object's ray with a flat plane at the object's own true height (so terrain error is left out) and says so. Take new pictures for the real numbers.
 
-## Telemetry and ground truth (modules 2–3)
+## Telemetry and ground truth
 
-Every frame the mission logs the camera pose, measured FOV, laser range and platform position. Every object is logged at spawn, and true positions are logged every 10 frames. `python tools\rpt_extract.py` writes them as JSONL to `output\sessions\`; `--follow --udp 127.0.0.1:5005` streams them live while you play.
+Every frame the mission logs the camera pose, FOV, laser range and platform position. Every object is logged at spawn, and true positions are logged every 10 frames. `python tools\rpt_extract.py` writes them as JSONL to `output\sessions\`; `--follow --udp 127.0.0.1:5005` streams them live while you play.
 
 ## Screenshot quality
 

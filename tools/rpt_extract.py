@@ -146,7 +146,7 @@ def extract(rpts, out_root: Path) -> list[Session]:
 
 
 def follow(rpt: Path, udp: str | None):
-    """Tail the RPT and forward telemetry records live (prototype transport, module 2)."""
+    """Tail the RPT and forward telemetry records live (prototype transport)."""
     sock = addr = None
     if udp:
         host, port = udp.rsplit(":", 1)

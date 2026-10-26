@@ -47,6 +47,7 @@ ZPI_center       = [0, 0, 0];
     enableSaving [false, false];
     enableSentences false;
     enableRadio false;
+    setTimeMultiplier 0;
 
     // ---- park the player out of the picture ----
     player allowDamage false;

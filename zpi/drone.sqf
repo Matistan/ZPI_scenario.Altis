@@ -28,15 +28,8 @@ ZPI_laserObj    = "";      // what was hit ("" = terrain)
 ZPI_scaleLock   = ZPI_cfg_startScaleLock;
 ZPI_targetGSD   = ZPI_cfg_targetGSD;
 
-// FOV: open loop. tan(hfov/2) = ZPI_fovK * zoom, K is measured, not assumed.
-ZPI_zoom        = 0.75;    // raw camSetFov value
-ZPI_fovK        = -1;      // measured ratio, -1 = not calibrated yet
-ZPI_fovTarget   = 20;      // wanted horizontal FOV, deg
-ZPI_fovCheckFrame = 0;     // frame at which to verify the last FOV change
-ZPI_fovTries    = 0;
-ZPI_hfov        = -1;      // measured horizontal FOV, deg
-ZPI_vfov        = -1;
-ZPI_fovSettled  = false;
+ZPI_hfov        = -1;      // horizontal FOV, deg
+ZPI_vfov        = -1;      // vertical FOV, deg
 
 // pose
 ZPI_dronePos    = [0, 0, 0];
@@ -136,7 +129,7 @@ ZPI_fnc_keyHeld = { params ["_dik"]; ZPI_keysDown getOrDefault [_dik, false] };
 
 ZPI_fnc_updateFreeCam = {
     params ["_dt"];
-    private _fovScale = (ZPI_fovTarget / 60) max 0.03;
+    private _fovScale = (ZPI_hfov / 60) max 0.03;
 
     // look: mouse deltas + arrow keys, scaled by FOV so zoomed views stay controllable
     private _sens = ZPI_cfg_mouseSens * _fovScale;
@@ -222,12 +215,8 @@ ZPI_fnc_setCamMode = {
 ZPI_fnc_createCamera = {
     call ZPI_fnc_updateDroneCam;
     ZPI_cam = "camera" camCreate (ASLToAGL ZPI_camPosASL);
-    ZPI_fovTarget = ZPI_cfg_fovPresets select ZPI_cfg_fovIndex;
-    ZPI_cam camSetFov ZPI_zoom;
-    ZPI_cam camCommit 0;
-    call ZPI_fnc_applyCamPose;
+    [ZPI_cfg_startFov] call ZPI_fnc_setFov;
     [true] call ZPI_fnc_setCamActive;
-    ZPI_fovCheckFrame = diag_frameNo + 3;    // first measurement calibrates K
 };
 
 ZPI_fnc_setCamActive = {
@@ -248,61 +237,17 @@ ZPI_fnc_setCamActive = {
 };
 
 // ---- FOV ---------------------------------------------------------------------------
-// Measure the real FOV from the projection (module 2 calibration idea).
-// Test points are 5 km in front of the camera and ~40 % of the half-width off-centre.
-// Long offsets matter: world positions near 13 km are only exact to ~1 mm in the
-// engine's 32-bit floats, so a 0.1 m offset (the old method) gave ~1 % FOV error.
-ZPI_fnc_measureFov = {
-    private _z = 5000;
-    // offset from the smaller of the last measured and the requested FOV, so the point stays on screen while zooming in
-    private _h = if (ZPI_hfov > 0) then { ZPI_hfov min ZPI_fovTarget } else { -1 };
-    private _tx = if (_h > 0) then { 0.4 * tan (_h / 2) } else { 0.002 };
-    private _ty = if (_h > 0 && {ZPI_vfov > 0}) then { 0.4 * tan ((ZPI_vfov * _h / ZPI_hfov) / 2) } else { 0.002 };
-    private _px = worldToScreen (positionCameraToWorld [_z * _tx, 0, _z]);
-    private _py = worldToScreen (positionCameraToWorld [0, _z * _ty, _z]);
-    if (count _px != 2) then { _tx = 0.002; _px = worldToScreen (positionCameraToWorld [_z * _tx, 0, _z]) };
-    if (count _py != 2) then { _ty = 0.002; _py = worldToScreen (positionCameraToWorld [0, _z * _ty, _z]) };
-    if (count _px == 2) then {
-        private _nx = (((_px select 0) - safeZoneX) / safeZoneW) * 2 - 1;
-        if (abs _nx > 1e-6) then { ZPI_hfov = 2 * atan (_tx / _nx) };
-    };
-    if (count _py == 2) then {
-        private _ny = 1 - (((_py select 1) - safeZoneY) / safeZoneH) * 2;
-        if (abs _ny > 1e-6) then { ZPI_vfov = 2 * atan (_ty / _ny) };
-    };
-};
-
-ZPI_fnc_setZoomValue = {
-    params ["_z"];
-    ZPI_zoom = (_z max 0.002) min 3;
-    ZPI_cam camSetFov ZPI_zoom;
+// camSetFov takes Arma's fovTop: zoom = 4/3 * tan(hfov/2) / AR, and vfov follows from square pixels.
+ZPI_fnc_setFov = {
+    params ["_deg"];
+    ZPI_hfov = (_deg max 0.5) min 100;
+    private _res = getResolution;
+    private _ar = (_res select 0) / (_res select 1);
+    ZPI_vfov = 2 * atan ((tan (ZPI_hfov / 2)) / _ar);
+    private _zoom = (4 / 3) * (tan (ZPI_hfov / 2)) / _ar;
+    ZPI_cam camSetFov _zoom;
     ZPI_cam camCommit 0;
     call ZPI_fnc_applyCamPose;
-};
-
-// Called whenever the wanted FOV changes (PgUp/PgDn, mouse wheel).
-ZPI_fnc_requestFov = {
-    params ["_deg"];
-    ZPI_fovTarget = (_deg max 0.5) min 100;
-    ZPI_fovSettled = false;
-    ZPI_fovTries = 0;
-    if (ZPI_fovK > 0) then { [(tan (ZPI_fovTarget / 2)) / ZPI_fovK] call ZPI_fnc_setZoomValue };
-    ZPI_fovCheckFrame = diag_frameNo + 3;
-};
-
-// Once, a few frames after a change: measure, update K, correct at most 3 times.
-ZPI_fnc_updateFov = {
-    call ZPI_fnc_measureFov;
-    if (ZPI_hfov <= 0 || {diag_frameNo < ZPI_fovCheckFrame} || {ZPI_fovCheckFrame < 0} || {ZPI_fovLock}) exitWith {};
-    ZPI_fovK = (tan (ZPI_hfov / 2)) / ZPI_zoom;
-    ZPI_fovSettled = abs (ZPI_hfov - ZPI_fovTarget) < 0.05;
-    if (ZPI_fovSettled || {ZPI_fovTries >= 3}) then {
-        ZPI_fovCheckFrame = -1;                       // done, no more corrections
-    } else {
-        ZPI_fovTries = ZPI_fovTries + 1;
-        [(tan (ZPI_fovTarget / 2)) / ZPI_fovK] call ZPI_fnc_setZoomValue;
-        ZPI_fovCheckFrame = diag_frameNo + 3;
-    };
 };
 
 ZPI_fnc_zoomStep = {              // +1 = zoom in (narrower FOV), presets
@@ -311,21 +256,21 @@ ZPI_fnc_zoomStep = {              // +1 = zoom in (narrower FOV), presets
     if (ZPI_scaleLock) exitWith { [ZPI_targetGSD * ([1.25, 0.8] select (_step > 0))] call ZPI_fnc_setGSD };
     // continue from the nearest preset to the current FOV
     private _i = 0; private _best = 1e9;
-    { if (abs (_x - ZPI_fovTarget) < _best) then { _best = abs (_x - ZPI_fovTarget); _i = _forEachIndex } } forEach ZPI_cfg_fovPresets;
-    ZPI_cfg_fovIndex = ((_i + _step) max 0) min (count ZPI_cfg_fovPresets - 1);
-    [ZPI_cfg_fovPresets select ZPI_cfg_fovIndex] call ZPI_fnc_requestFov;
-    ["fov", format ['{"hfov_target_deg":%1}', ZPI_fovTarget]] call ZPI_fnc_event;
-    [format ["FOV %1 deg", ZPI_fovTarget]] call ZPI_fnc_msg;
+    { if (abs (_x - ZPI_hfov) < _best) then { _best = abs (_x - ZPI_hfov); _i = _forEachIndex } } forEach ZPI_cfg_fovPresets;
+    private _next = ((_i + _step) max 0) min (count ZPI_cfg_fovPresets - 1);
+    [ZPI_cfg_fovPresets select _next] call ZPI_fnc_setFov;
+    ["fov", format ['{"hfov_deg":%1}', ZPI_hfov]] call ZPI_fnc_event;
+    [format ["FOV %1 deg", ZPI_hfov]] call ZPI_fnc_msg;
 };
 
 ZPI_fnc_wheelZoom = {             // smooth zoom with the mouse wheel
     params ["_z"];
     if (ZPI_fovLock) exitWith {};
     if (ZPI_scaleLock) exitWith { [ZPI_targetGSD * (ZPI_cfg_wheelStep ^ _z)] call ZPI_fnc_setGSD };
-    [ZPI_fovTarget * (ZPI_cfg_wheelStep ^ _z)] call ZPI_fnc_requestFov;
+    [ZPI_hfov * (ZPI_cfg_wheelStep ^ _z)] call ZPI_fnc_setFov;
 };
 
-// ---- frame-number bar (module 3: image <-> telemetry sync) --------------------------
+// ---- frame-number bar (image <-> telemetry sync) --------------------------
 // 2 sentinel squares (white, black) + 24 data bits, LSB first, 8x8 px each,
 // starting 4 px from the top-left corner. Decoder: tools/frame_code.py
 // Note: the screenshot command does not capture UI, so the bar is only in
@@ -378,10 +323,10 @@ ZPI_fnc_logTelemetry = {
     private _plat = [ZPI_camPosASL, ZPI_dronePos] select (ZPI_camMode == "drone");
     private _res = getResolution;
     ["tel", format [
-        '{"frame":%1,"t_game":%2,"t_tick":%3,"camera":{"pos_asl":%4,"x_axis":%5,"y_axis":%6,"z_axis":%7,"hfov_deg":%8,"vfov_deg":%9,"fov_settled":%10,"gimbal":"%11","mode":"%20"},"drone":{"pos_asl":%12,"dir":%13},"range_m":%14,"image":{"w":%15,"h":%16},"scene":"%17","seed":%18,"region":%19}',
+        '{"frame":%1,"t_game":%2,"t_tick":%3,"camera":{"pos_asl":%4,"x_axis":%5,"y_axis":%6,"z_axis":%7,"hfov_deg":%8,"vfov_deg":%9,"gimbal":"%10","mode":"%19"},"drone":{"pos_asl":%11,"dir":%12},"range_m":%13,"image":{"w":%14,"h":%15},"scene":"%16","seed":%17,"region":%18}',
         diag_frameNo toFixed 0, time toFixed 3, diag_tickTime toFixed 4,
         [_o, 3] call ZPI_fnc_v3, [_r, 7] call ZPI_fnc_v3, [_u, 7] call ZPI_fnc_v3, [_f, 7] call ZPI_fnc_v3,
-        ZPI_hfov toFixed 6, ZPI_vfov toFixed 6, ZPI_fovSettled, ZPI_gimbalModes select ZPI_gimbalIndex,
+        ZPI_hfov toFixed 6, ZPI_vfov toFixed 6, ZPI_gimbalModes select ZPI_gimbalIndex,
         [_plat, 2] call ZPI_fnc_v3, [ZPI_droneDir, 4] call ZPI_fnc_v3,
         _range, _res select 0, _res select 1,
         ZPI_sceneName, ZPI_cfg_seed, ZPI_regionId, ZPI_camMode
@@ -429,7 +374,7 @@ ZPI_fnc_attitude = {
 
 // ground sample distance at the laser point, m per screen pixel
 ZPI_fnc_gsdNow = {
-    if (ZPI_laserRange <= 0 || {ZPI_hfov <= 0}) exitWith { -1 };
+    if (ZPI_laserRange <= 0) exitWith { -1 };
     2 * ZPI_laserRange * (tan (ZPI_hfov / 2)) / ((getResolution) select 0)
 };
 
@@ -454,21 +399,10 @@ ZPI_fnc_toggleScaleLock = {
 
 ZPI_fnc_updateScaleLock = {
     params ["_dt"];
-    if (!ZPI_scaleLock || {ZPI_fovLock} || {ZPI_laserRange <= 0} || {ZPI_fovK <= 0}) exitWith {};
+    if (!ZPI_scaleLock || {ZPI_fovLock} || {ZPI_laserRange <= 0}) exitWith {};
     private _want = 2 * atan ((ZPI_targetGSD * ((getResolution) select 0)) / (2 * ZPI_laserRange));
-    _want = (_want max 0.5) min 90;
-    if (abs (_want - ZPI_fovTarget) / ZPI_fovTarget < 0.005) exitWith {};
-    [ZPI_fovTarget + (_want - ZPI_fovTarget) * ((ZPI_cfg_scaleLockRate * _dt) min 1)] call ZPI_fnc_requestFov;
-};
-
-// ---- on-screen readout ---------------------------------------------------------------
-ZPI_fnc_showHud = {
-    if (!ZPI_cfg_hud) exitWith {};
-    ("ZPI_hudLayer" call BIS_fnc_rscLayer) cutRsc ["ZPI_Hud", "PLAIN", 0, false];
-};
-
-ZPI_fnc_hideHud = {
-    ("ZPI_hudLayer" call BIS_fnc_rscLayer) cutText ["", "PLAIN"];
+    if (abs (_want - ZPI_hfov) / ZPI_hfov < 0.005) exitWith {};
+    [ZPI_hfov + (_want - ZPI_hfov) * ((ZPI_cfg_scaleLockRate * _dt) min 1)] call ZPI_fnc_setFov;
 };
 
 ZPI_hudExtra = "";                // extra line, e.g. building occupancy
@@ -528,21 +462,34 @@ ZPI_fnc_onFrame = {
         };
         call ZPI_fnc_updateDrone;
         if (ZPI_camActive) then {
-            if (ZPI_camMode == "drone") then { call ZPI_fnc_updateDroneCam } else { [_rdt] call ZPI_fnc_updateFreeCam };
+            if (ZPI_camMode == "drone") then {
+                call ZPI_fnc_updateDroneCam
+            } else {
+                [_rdt] call ZPI_fnc_updateFreeCam;
+            };
             call ZPI_fnc_applyCamPose;
         };
     };
     if (!ZPI_camActive) exitWith {
-        if (ZPI_cfg_gtEvery > 0 && {diag_frameNo % ZPI_cfg_gtEvery == 0}) then { call ZPI_fnc_logGT };
+        if (ZPI_cfg_gtEvery > 0 && {diag_frameNo % ZPI_cfg_gtEvery == 0}) then {
+            call ZPI_fnc_logGT;
+        };
     };
     call ZPI_fnc_updateLaser;
     [_rdt] call ZPI_fnc_updateScaleLock;
-    call ZPI_fnc_updateFov;
     call ZPI_fnc_captureTick;
     call ZPI_fnc_buildingTick;
-    if (ZPI_cfg_hud && {diag_frameNo % ZPI_cfg_hudEvery == 0}) then { call ZPI_fnc_updateHud };
+    if (ZPI_cfg_hud && {diag_frameNo % ZPI_cfg_hudEvery == 0}) then {
+        call ZPI_fnc_updateHud;
+    };
     ZPI_drone hideObject (ZPI_camMode == "free");        // the airframe only belongs in drone mode
-    if (ZPI_cfg_frameCode) then { call ZPI_fnc_updateFrameCode };
-    if (ZPI_cfg_telemetryEvery > 0 && {diag_frameNo % ZPI_cfg_telemetryEvery == 0}) then { call ZPI_fnc_logTelemetry };
-    if (ZPI_cfg_gtEvery > 0 && {diag_frameNo % ZPI_cfg_gtEvery == 0}) then { call ZPI_fnc_logGT };
+    if (ZPI_cfg_frameCode) then {
+        call ZPI_fnc_updateFrameCode;
+    };
+    if (ZPI_cfg_telemetryEvery > 0 && {diag_frameNo % ZPI_cfg_telemetryEvery == 0}) then {
+        call ZPI_fnc_logTelemetry;
+    };
+    if (ZPI_cfg_gtEvery > 0 && {diag_frameNo % ZPI_cfg_gtEvery == 0}) then {
+        call ZPI_fnc_logGT;
+    };
 };
