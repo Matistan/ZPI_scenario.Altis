@@ -39,13 +39,6 @@ def default_rpt_dir() -> Path:
     return zpi_paths.rpt_dir()
 
 
-def newest_rpt(directory: Path) -> Path:
-    files = sorted(glob.glob(str(directory / "*.rpt")), key=os.path.getmtime)
-    if not files:
-        sys.exit(f"No .rpt files in {directory}")
-    return Path(files[-1])
-
-
 def parse_line(line: str):
     m = LINE_RE.search(line.rstrip("\r\n"))
     if not m:

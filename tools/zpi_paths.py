@@ -83,18 +83,6 @@ def rpt_files() -> list[Path]:
     return [Path(f) for f in sorted(glob.glob(str(rpt_dir() / "*.rpt")), key=os.path.getmtime)]
 
 
-def find_mission() -> Path | None:
-    """This mission (when the tools are inside it), else the first ZPI mission in the profiles."""
-    if MISSION_DIR is not None:
-        return MISSION_DIR
-    for docs in _documents():
-        for pattern in ("Arma 3*/missions/*", "Arma 3*/mpmissions/*", "Arma 3 - Other Profiles/*/missions/*"):
-            for p in sorted(docs.glob(pattern)):
-                if _is_mission(p) and (p / "zpi" / "config.sqf").exists():
-                    return p
-    return None
-
-
 def describe() -> str:
     return (f"mission: {MISSION_DIR or '(tools are not inside a mission folder)'}\n"
             f"screenshots: {', '.join(map(str, screenshot_dirs()))}\n"

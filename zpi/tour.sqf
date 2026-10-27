@@ -162,13 +162,6 @@ ZPI_fnc_tourObjs = {            // [cls list] -> alive scene objects of those cl
     (ZPI_entities select { (_x select 2) in _cls && {!isNull (_x select 1)} && {alive (_x select 1)} }) apply { _x select 1 }
 };
 
-ZPI_fnc_tourCentroid = {        // [objects] -> average position ASL
-    params ["_objs"];
-    private _c = [0, 0, 0];
-    { _c = _c vectorAdd (getPosASL _x) } forEach _objs;
-    _c vectorMultiply (1 / ((count _objs) max 1))
-};
-
 // Static layouts: a share of the standing soldiers walk around their spot, so the
 // pictures of a burst are not all identical. Stops when the scene is cleared.
 ZPI_fnc_tourAnimate = {

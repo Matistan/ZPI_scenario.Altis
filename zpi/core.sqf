@@ -62,15 +62,10 @@ ZPI_fnc_pad = {                  // [number, width] -> zero-padded string
 
 // ---- output ---------------------------------------------------------------
 // Every record is one line:  ZPI|<type>|<json>
-// Types: tel (telemetry), gt (ground truth), spawn (object created), evt (events).
 ZPI_fnc_emit = {
     params ["_type", "_json"];
     private _line = format ["ZPI|%1|%2", _type, _json];
-    if (ZPI_cfg_useExtension) then {
-        ZPI_cfg_extensionName callExtension ["push", [_line]];
-    } else {
-        diag_log text _line;
-    };
+    diag_log text _line;
 };
 
 ZPI_fnc_event = {

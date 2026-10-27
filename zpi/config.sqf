@@ -48,7 +48,6 @@ ZPI_cfg_soldierTightBox = true;  // label = union of the projected body parts (t
 ZPI_cfg_soldierPartPad  = 0.03;  // m around each body part (uniform, vest)
 ZPI_cfg_soldierHelmet   = 0.08;  // m added above the head (helmet)
 ZPI_cfg_soldierBackpack = 0.22;  // m added behind the back when he carries a backpack
-ZPI_cfg_vehicleClip   = 2;       // boundingBoxReal clipping: 2 = geometry (tighter, no antennas), 3 = everything
 ZPI_cfg_labelBuildings = true;   // every building in the picture gets a "building" box
 ZPI_cfg_labelsPerLine = 3;     // boxes per log line (log lines over ~1000 characters may get cut off)
 // explosion label size by ammo power: [radius m, height m, duration s]
@@ -104,7 +103,6 @@ ZPI_cfg_tourExplosions = 1;      // explosion close-ups per scene visit
 // scenes, static vehicle scenes, tank firing, explosion close-ups): a soldier always has about
 // the same pixel size, so the detector does not have to learn many sizes of the same class.
 ZPI_cfg_tourSoldierGSD = [0.009, 0.0115]; // m/px (picture 17-22 m wide; soldier seen from 35-60 deg ~55-90 px)
-ZPI_cfg_tourGroupGSD   = ZPI_cfg_tourSoldierGSD;
 ZPI_cfg_tourExplosionGSD = [0.03, 0.045];  // explosion pictures: zoomed out (58-86 m wide), the smoke column is a
                                            // part of the picture, not all of it, so the measured box fits the smoke
 ZPI_cfg_tourGroupRadius = 8;             // m: soldiers within this distance are aimed at together
@@ -115,7 +113,6 @@ ZPI_cfg_tourColumnGSD  = [0.05, 0.09];   // m/px for a whole driving column
 // ground detail (grass), so the background keeps its real colour.
 ZPI_cfg_tourDist       = [120, 300];     // soldier / vehicle close-ups (closer = sharp ground textures, less haze)
 ZPI_cfg_tourDistWide   = [220, 450];     // driving columns
-ZPI_cfg_tourFrameMargin = 3;             // m around the squad in building-scene pictures (everyone in the picture, as big as possible)
 ZPI_cfg_tourSettle     = 3.5;            // s at a new camera position before the first picture (textures load in)
 ZPI_cfg_tourElev       = [40, 75];
 ZPI_cfg_tourElevSoldier = [35, 60];      // soldier shots: lower, so more of the soldier's height shows (straight down = only head and shoulders)
@@ -167,8 +164,6 @@ ZPI_cfg_convoySpeed     = 20;    // km/h, slow enough that a burst shows the col
 ZPI_cfg_telemetryEvery = 1;      // telemetry every N frames (0 = off)
 ZPI_cfg_gtEvery        = 10;     // ground-truth positions every N frames (0 = off)
 ZPI_cfg_gtMaxPerLine   = 12;     // objects per log line (keeps RPT lines short)
-ZPI_cfg_useExtension   = false;  // true once the telemetry DLL exists
-ZPI_cfg_extensionName  = "zpi_telemetry";
 
 // ---- world -----------------------------------------------------------------
 ZPI_cfg_viewDistance   = 4000;

@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import math
 
-DEFAULTS = {"target": 0.48, "sat": 1.05, "lo_pct": 0.3, "hi_pct": 99.8, "max_gain": 2.5, "wb": 0.25}
-
 
 def enhance(im, target: float = 0.48, sat: float = 1.05, lo_pct: float = 0.3, hi_pct: float = 99.8,
             max_gain: float = 2.5, wb: float = 0.25):
