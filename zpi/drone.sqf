@@ -1,19 +1,12 @@
 // =====================================================================
-//  ZPI scene pack - camera (free-fly + drone orbit), FOV, per-frame loop,
+//  ZPI scene pack - camera, FOV, per-frame loop,
 //  telemetry and ground-truth logging, frame-number bar
 //
 //  The camera pose is set directly every frame (setPosASL +
-//  setVectorDirAndUp). The earlier version used camSetTarget/camCommit
-//  plus a closed-loop FOV controller, which made the view jitter.
+//  setVectorDirAndUp).
 // =====================================================================
 
-ZPI_camMode     = "free";  // "free" (fly yourself) | "drone" (scripted orbit)
-ZPI_orbitAngle  = 0;       // compass bearing of the drone as seen from the center, deg
-ZPI_orbitPaused = false;
-ZPI_lastTime    = 0;
 ZPI_lastTick    = 0;
-ZPI_gimbalModes = ["track", "scan", "nadir"];
-ZPI_gimbalIndex = 0;
 ZPI_camActive   = false;
 ZPI_frozen      = false;   // true while a capture is being taken
 ZPI_camLock     = false;   // camera pose held still (explosion reference shots, orthophoto)
@@ -25,15 +18,13 @@ ZPI_laserPos    = [];      // ASL
 ZPI_laserObj    = "";      // what was hit ("" = terrain)
 
 // constant pixel size (R)
-ZPI_scaleLock   = ZPI_cfg_startScaleLock;
+ZPI_scaleLock   = true;
 ZPI_targetGSD   = ZPI_cfg_targetGSD;
 
 ZPI_hfov        = -1;      // horizontal FOV, deg
 ZPI_vfov        = -1;      // vertical FOV, deg
 
 // pose
-ZPI_dronePos    = [0, 0, 0];
-ZPI_droneDir    = [0, 1, 0];
 ZPI_camPosASL   = [0, 0, 0];
 ZPI_camDir      = [0, 1, 0];
 ZPI_camUp       = [0, 0, 1];
@@ -57,70 +48,9 @@ ZPI_fnc_upFromYawPitch = {      // camera up vector, no roll
     [-(sin _y) * (sin _p), -(cos _y) * (sin _p), cos _p]
 };
 
-ZPI_fnc_upFromDir = {           // no-roll up vector for an arbitrary view direction
-    params ["_dir", ["_fallbackFwd", [0, 1, 0]]];
-    private _right = _dir vectorCrossProduct [0, 0, 1];
-    if ((vectorMagnitude _right) < 0.001) then { _right = _dir vectorCrossProduct _fallbackFwd };
-    vectorNormalized (_right vectorCrossProduct _dir)
-};
-
 ZPI_fnc_applyCamPose = {
     ZPI_cam setPosASL ZPI_camPosASL;
     ZPI_cam setVectorDirAndUp [ZPI_camDir, ZPI_camUp];
-};
-
-// ---- drone -----------------------------------------------------------------
-ZPI_fnc_createDrone = {
-    private _cls = ([["B_UAV_02_dynamicLoadout_F", "B_UAV_02_F"]] call ZPI_fnc_validClasses) param [0, "B_UAV_02_F"];
-    ZPI_drone = createVehicle [_cls, [0, 0, 1000], [], 0, "FLY"];
-    ZPI_drone allowDamage false;
-    ZPI_drone enableSimulation false;
-    // reconnaissance only: strip every pylon
-    { ZPI_drone setPylonLoadout [_forEachIndex + 1, ""] } forEach (getPylonMagazines ZPI_drone);
-    call ZPI_fnc_updateDrone;
-};
-
-ZPI_fnc_updateDrone = {
-    private _c  = ZPI_center;
-    private _gz = getTerrainHeightASL _c;
-    private _a  = ZPI_orbitAngle;
-    private _r  = ZPI_cfg_orbitRadius;
-    private _v  = ZPI_cfg_orbitSpeed;
-
-    private _pos = [(_c select 0) + _r * (sin _a), (_c select 1) + _r * (cos _a), _gz + ZPI_cfg_orbitAlt];
-    _pos set [2, (_pos select 2) max ((getTerrainHeightASL _pos) + 100)];
-
-    private _dir      = [cos _a, -(sin _a), 0];                 // clockwise tangent
-    private _toCenter = [-(sin _a), -(cos _a), 0];
-    private _bank     = atan ((_v * _v) / (_r * 9.81));
-    private _up       = ([0, 0, 1] vectorMultiply (cos _bank)) vectorAdd (_toCenter vectorMultiply (sin _bank));
-
-    ZPI_drone setPosASL _pos;
-    ZPI_drone setVectorDirAndUp [_dir, _up];
-    ZPI_dronePos = _pos;
-    ZPI_droneDir = _dir;
-};
-
-ZPI_fnc_gimbalTarget = {          // -> PositionASL the drone camera looks at
-    private _c  = ZPI_center;
-    switch (ZPI_gimbalModes select ZPI_gimbalIndex) do {
-        case "scan": {
-            private _s = time * ZPI_cfg_scanRate;
-            private _p = [(_c select 0) + ZPI_cfg_scanRadius * (sin _s), (_c select 1) + ZPI_cfg_scanRadius * (cos _s)];
-            [_p select 0, _p select 1, getTerrainHeightASL _p]
-        };
-        case "nadir": { ZPI_camPosASL vectorAdd [0, 0, -100] };
-        default { [_c select 0, _c select 1, getTerrainHeightASL _c] };
-    }
-};
-
-ZPI_fnc_updateDroneCam = {
-    ZPI_camPosASL = ZPI_dronePos vectorAdd [0, 0, -ZPI_cfg_camBelowDrone];
-    ZPI_camDir = vectorNormalized ((call ZPI_fnc_gimbalTarget) vectorDiff ZPI_camPosASL);
-    ZPI_camUp  = [ZPI_camDir, ZPI_droneDir] call ZPI_fnc_upFromDir;
-    // keep yaw/pitch in sync so switching to free mode starts from the same view
-    ZPI_yaw   = (ZPI_camDir select 0) atan2 (ZPI_camDir select 1);
-    ZPI_pitch = asin ((ZPI_camDir select 2) max -1 min 1);
 };
 
 // ---- free camera ------------------------------------------------------------------
@@ -173,7 +103,7 @@ ZPI_fnc_updateFreeCam = {
 // First surface (ground, building, tree) in the middle of the screen, ASL; [] when looking at the sky.
 ZPI_fnc_lookPoint = {
     private _hits = lineIntersectsSurfaces [ZPI_camPosASL, ZPI_camPosASL vectorAdd (ZPI_camDir vectorMultiply 8000),
-        ZPI_drone, objNull, true, 1, "GEOM", "NONE"];
+        objNull, objNull, true, 1, "GEOM", "NONE"];
     if (_hits isEqualTo []) exitWith { [] };
     (_hits select 0) select 0
 };
@@ -187,7 +117,7 @@ ZPI_fnc_centerInView = {
 // _force = false: only when the scene is out of view or far away.
 ZPI_fnc_viewScene = {
     params [["_force", false]];
-    if (ZPI_camMode != "free" || {!ZPI_camActive}) exitWith {};
+    if (!ZPI_camActive) exitWith {};
     if (!_force && {call ZPI_fnc_centerInView}) exitWith {};
     private _c  = ZPI_center;
     private _gz = getTerrainHeightASL _c;
@@ -203,20 +133,12 @@ ZPI_fnc_viewScene = {
     call ZPI_fnc_applyCamPose;
 };
 
-ZPI_fnc_setCamMode = {
-    params ["_mode"];
-    ZPI_camMode = _mode;
-    ZPI_camVel = [0, 0, 0];
-    ["cam_mode", format ['{"mode":"%1"}', _mode]] call ZPI_fnc_event;
-    [format ["Camera: %1", _mode]] call ZPI_fnc_msg;
-};
-
 // ---- camera object ------------------------------------------------------------
 ZPI_fnc_createCamera = {
-    call ZPI_fnc_updateDroneCam;
-    ZPI_cam = "camera" camCreate (ASLToAGL ZPI_camPosASL);
+    ZPI_cam = "camera" camCreate [0, 0, 0];
     [ZPI_cfg_startFov] call ZPI_fnc_setFov;
     [true] call ZPI_fnc_setCamActive;
+    [true] call ZPI_fnc_viewScene;
 };
 
 ZPI_fnc_setCamActive = {
@@ -226,11 +148,11 @@ ZPI_fnc_setCamActive = {
         ZPI_cam cameraEffect ["internal", "back"];
         cameraEffectEnableHUD false;
         ZPI_camActive = true;
-        if (ZPI_cfg_frameCode) then { call ZPI_fnc_showFrameCode };
-        if (!ZPI_quiet) then { call ZPI_fnc_showHud };
+        if (!ZPI_quiet) then {
+            call ZPI_fnc_showHud;
+        };
     } else {
         ZPI_cam cameraEffect ["terminate", "back"];
-        call ZPI_fnc_hideFrameCode;
         call ZPI_fnc_hideHud;
     };
     ZPI_camActive = _on;
@@ -250,7 +172,7 @@ ZPI_fnc_setFov = {
     call ZPI_fnc_applyCamPose;
 };
 
-ZPI_fnc_zoomStep = {              // +1 = zoom in (narrower FOV), presets
+ZPI_fnc_zoomStep = {              // +1 = zoom in (narrower FOV), -1 = zoom out
     params ["_step"];
     if (ZPI_fovLock) exitWith {};
     if (ZPI_scaleLock) exitWith { [ZPI_targetGSD * ([1.25, 0.8] select (_step > 0))] call ZPI_fnc_setGSD };
@@ -275,20 +197,15 @@ ZPI_fnc_wheelZoom = {             // smooth zoom with the mouse wheel
 // starting 4 px from the top-left corner. Decoder: tools/frame_code.py
 // Note: the screenshot command does not capture UI, so the bar is only in
 // screen captures (dxcam/OBS), never in screenshots taken with the P key.
-ZPI_fnc_showFrameCode = {
-    ("ZPI_frameCodeLayer" call BIS_fnc_rscLayer) cutRsc ["ZPI_FrameCode", "PLAIN", 0, false];
-};
-
-ZPI_fnc_hideFrameCode = {
-    ("ZPI_frameCodeLayer" call BIS_fnc_rscLayer) cutText ["", "PLAIN"];
-};
 
 ZPI_fnc_hideHud = {
     ("ZPI_hudLayer" call BIS_fnc_rscLayer) cutText ["", "PLAIN"];
+    ("ZPI_frameCodeLayer" call BIS_fnc_rscLayer) cutText ["", "PLAIN"];
 };
 
 ZPI_fnc_showHud = {
     ("ZPI_hudLayer" call BIS_fnc_rscLayer) cutRsc ["ZPI_Hud", "PLAIN", 0, false];
+    ("ZPI_frameCodeLayer" call BIS_fnc_rscLayer) cutRsc ["ZPI_FrameCode", "PLAIN", 0, false];
 };
 
 ZPI_fnc_updateFrameCode = {
@@ -320,16 +237,12 @@ ZPI_fnc_camBasis = {            // -> [originASL, right, up, forward] (unit vect
 ZPI_fnc_logTelemetry = {
     (call ZPI_fnc_camBasis) params ["_o", "_r", "_u", "_f"];
     private _range = ["null", ZPI_laserRange toFixed 2] select (ZPI_laserRange > 0);
-    private _plat = [ZPI_camPosASL, ZPI_dronePos] select (ZPI_camMode == "drone");
     private _res = getResolution;
     ["tel", format [
-        '{"frame":%1,"t_game":%2,"t_tick":%3,"camera":{"pos_asl":%4,"x_axis":%5,"y_axis":%6,"z_axis":%7,"hfov_deg":%8,"vfov_deg":%9,"gimbal":"%10","mode":"%19"},"drone":{"pos_asl":%11,"dir":%12},"range_m":%13,"image":{"w":%14,"h":%15},"scene":"%16","seed":%17,"region":%18}',
+        '{"frame":%1,"t_game":%2,"t_tick":%3,"camera":{"pos_asl":%4,"x_axis":%5,"y_axis":%6,"z_axis":%7,"hfov_deg":%8,"vfov_deg":%9},"range_m":%10,"image":{"w":%11,"h":%12},"scene":"%13","seed":%14,"region":%15}',
         diag_frameNo toFixed 0, time toFixed 3, diag_tickTime toFixed 4,
         [_o, 3] call ZPI_fnc_v3, [_r, 7] call ZPI_fnc_v3, [_u, 7] call ZPI_fnc_v3, [_f, 7] call ZPI_fnc_v3,
-        ZPI_hfov toFixed 6, ZPI_vfov toFixed 6, ZPI_gimbalModes select ZPI_gimbalIndex,
-        [_plat, 2] call ZPI_fnc_v3, [ZPI_droneDir, 4] call ZPI_fnc_v3,
-        _range, _res select 0, _res select 1,
-        ZPI_sceneName, ZPI_cfg_seed, ZPI_regionId, ZPI_camMode
+        ZPI_hfov toFixed 6, ZPI_vfov toFixed 6, _range, _res select 0, _res select 1, ZPI_sceneName, ZPI_cfg_seed, ZPI_regionId
     ]] call ZPI_fnc_emit;
 };
 
@@ -357,7 +270,7 @@ ZPI_fnc_logGT = {
 // ---- laser rangefinder ---------------------------------------------------------------
 ZPI_fnc_updateLaser = {
     private _hits = lineIntersectsSurfaces [ZPI_camPosASL, ZPI_camPosASL vectorAdd (ZPI_camDir vectorMultiply 8000),
-        ZPI_drone, objNull, true, 1, "GEOM", "NONE"];
+        objNull, objNull, true, 1, "GEOM", "NONE"];
     if (_hits isEqualTo []) exitWith { ZPI_laserRange = -1; ZPI_laserPos = []; ZPI_laserObj = "" };
     private _h = _hits select 0;
     ZPI_laserPos = _h select 0;
@@ -412,14 +325,6 @@ ZPI_hudGround = "---";
 ZPI_fnc_updateHud = {
     private _d = uiNamespace getVariable ["ZPI_hudDisplay", displayNull];
     if (isNull _d) exitWith {};
-    if (ZPI_quiet) exitWith {
-        (_d displayCtrl 1200) ctrlSetText "";
-        {
-            (_d displayCtrl _x) ctrlShow false
-        } forEach [1201, 1202, 1203, 1204] };
-    {
-        (_d displayCtrl _x) ctrlShow true
-    } forEach [1201, 1202, 1203, 1204];
     (call ZPI_fnc_attitude) params ["_hdg", "_pitch"];
     private _gz  = (getTerrainHeightASL ZPI_camPosASL) max 0;
     private _alt = ZPI_camPosASL select 2;
@@ -451,24 +356,12 @@ ZPI_fnc_updateHud = {
 // ---- per-frame loop -------------------------------------------------------------
 ZPI_fnc_onFrame = {
     if (isGamePaused) exitWith { ZPI_lastTick = diag_tickTime };
-    private _dt = time - ZPI_lastTime;
-    ZPI_lastTime = time;
     private _rdt = ((diag_tickTime - ZPI_lastTick) max 0) min 0.1;   // real time, for the free camera
     ZPI_lastTick = diag_tickTime;
 
-    if (!ZPI_frozen && {!ZPI_camLock}) then {
-        if (!ZPI_orbitPaused) then {
-            ZPI_orbitAngle = (ZPI_orbitAngle + (ZPI_cfg_orbitSpeed / ZPI_cfg_orbitRadius) * _dt * (180 / pi)) mod 360;
-        };
-        call ZPI_fnc_updateDrone;
-        if (ZPI_camActive) then {
-            if (ZPI_camMode == "drone") then {
-                call ZPI_fnc_updateDroneCam
-            } else {
-                [_rdt] call ZPI_fnc_updateFreeCam;
-            };
-            call ZPI_fnc_applyCamPose;
-        };
+    if (!ZPI_frozen && {!ZPI_camLock} && {ZPI_camActive}) then {
+        [_rdt] call ZPI_fnc_updateFreeCam;
+        call ZPI_fnc_applyCamPose;
     };
     if (!ZPI_camActive) exitWith {
         if (ZPI_cfg_gtEvery > 0 && {diag_frameNo % ZPI_cfg_gtEvery == 0}) then {
@@ -479,11 +372,10 @@ ZPI_fnc_onFrame = {
     [_rdt] call ZPI_fnc_updateScaleLock;
     call ZPI_fnc_captureTick;
     call ZPI_fnc_buildingTick;
-    if (ZPI_cfg_hud && {diag_frameNo % ZPI_cfg_hudEvery == 0}) then {
+    if (diag_frameNo % ZPI_cfg_hudEvery == 0) then {
         call ZPI_fnc_updateHud;
     };
-    ZPI_drone hideObject (ZPI_camMode == "free");        // the airframe only belongs in drone mode
-    if (ZPI_cfg_frameCode) then {
+    if (!ZPI_quiet) then {
         call ZPI_fnc_updateFrameCode;
     };
     if (ZPI_cfg_telemetryEvery > 0 && {diag_frameNo % ZPI_cfg_telemetryEvery == 0}) then {

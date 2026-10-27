@@ -7,13 +7,6 @@
 ZPI_cfg_faction      = "CSAT";   // target faction: "CSAT" | "NATO" | "AAF"
 ZPI_cfg_seed         = 1;        // base seed; same seed + same location = same layout (N key = seed+1)
 ZPI_cfg_startScene   = 6;        // scene launched at mission start (-1 = none)
-ZPI_cfg_startCamMode = "free";   // "free" (fly the camera yourself) or "drone" (scripted orbit); V switches
-
-// ---- drone orbit (scripted, deterministic) -----------------------------
-ZPI_cfg_orbitAlt     = 500;      // m above terrain at the scene center
-ZPI_cfg_orbitRadius  = 800;      // m
-ZPI_cfg_orbitSpeed   = 35;       // m/s (MQ-4A loiter speed range)
-ZPI_cfg_camBelowDrone = 1.5;     // gimbal offset below the airframe, m
 
 // ---- camera ------------------------------------------------------------
 // Horizontal FOV presets in degrees (PgUp / PgDn). camSetFov is computed from the preset.
@@ -29,15 +22,9 @@ ZPI_cfg_startFov     = 30;       // deg, horizontal FOV at mission start
 // 1.8 / GSD pixels tall, a tank (~7 m long) about 7 / GSD pixels.
 ZPI_cfg_targetGSD    = 0.010;    // m/px -> standing soldier ~180 px from the side, ~60 x 90 px seen from above at 45-60 deg
 ZPI_cfg_gsdLimits    = [0.004, 0.5];
-ZPI_cfg_startScaleLock = true;   // constant pixel size on from the start
 ZPI_cfg_scaleLockRate = 4;       // how fast the zoom follows range changes (1/s)
 
-// ---- on-screen readout (laser rangefinder, altitude, attitude) -----------------------
-// Not part of screenshots (the screenshot command never captures UI).
-ZPI_cfg_hud          = true;
 ZPI_cfg_hudEvery     = 3;        // update every N frames
-ZPI_cfg_scanRadius   = 150;      // m, radius of the "scan" gimbal sweep on the ground
-ZPI_cfg_scanRate     = 12;       // deg/s of the sweep angle
 
 // ---- free camera (V switches free <-> drone) ------------------------------------
 ZPI_cfg_mouseSens     = 0.05;    // deg per mouse unit at 60 deg FOV (scaled down when zoomed in)
@@ -180,7 +167,6 @@ ZPI_cfg_convoySpeed     = 20;    // km/h, slow enough that a burst shows the col
 ZPI_cfg_telemetryEvery = 1;      // telemetry every N frames (0 = off)
 ZPI_cfg_gtEvery        = 10;     // ground-truth positions every N frames (0 = off)
 ZPI_cfg_gtMaxPerLine   = 12;     // objects per log line (keeps RPT lines short)
-ZPI_cfg_frameCode      = true;   // 24-bit frame-number bar in the top-left corner
 ZPI_cfg_useExtension   = false;  // true once the telemetry DLL exists
 ZPI_cfg_extensionName  = "zpi_telemetry";
 

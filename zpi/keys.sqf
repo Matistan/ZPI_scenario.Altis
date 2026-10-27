@@ -1,13 +1,12 @@
 // =====================================================================
-//  ZPI scene pack - controls (DIK key codes) and help text
+//  ZPI scene pack - controls
 // =====================================================================
 
 ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br/>"
     + "<t align='left'>"
-    + "<t color='#ffd27a'>CAMERA</t>  V free / drone<br/>"
+    + "<t color='#ffd27a'>CAMERA</t><br/>"
     + "Free: WASD move, E up, Q down, Shift fast<br/>"
     + "Mouse look, wheel zoom, arrows look<br/>"
-    + "Drone: G gimbal, O pause, arrows alt/radius<br/>"
     + "PgUp / PgDn zoom presets (75 ... 1.2 deg)<br/>"
     + "R constant pixel size on/off (zoom follows range)<br/><br/>"
     + "<t color='#ffd27a'>DATASET</t><br/>"
@@ -33,24 +32,13 @@ ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br
     + "N new layout &#160; X clear &#160; L next location<br/>"
     + "C scene to where you look &#160; J camera to scene<br/>"
     + "Alt+click on map: move scene there<br/><br/>"
-    + "T time &#160; Y weather &#160; F frame bar<br/>"
+    + "T time &#160; Y weather &#160<br/>"
     + "U quiet (no text) &#160; H help"
     + "</t>";
 
 ZPI_fnc_showHelp = {
     hintSilent parseText ZPI_helpText;
     [] spawn { sleep 10; hintSilent "" };
-};
-
-ZPI_fnc_status = {
-    [format ["alt %1 m, radius %2 m, gimbal %3, FOV %4 deg",
-        ZPI_cfg_orbitAlt, ZPI_cfg_orbitRadius, ZPI_gimbalModes select ZPI_gimbalIndex,
-        ZPI_hfov toFixed 1]] call ZPI_fnc_msg;
-};
-
-ZPI_fnc_orbitEvent = {
-    ["orbit", format ['{"alt":%1,"radius":%2}', ZPI_cfg_orbitAlt, ZPI_cfg_orbitRadius]] call ZPI_fnc_event;
-    call ZPI_fnc_status;
 };
 
 // keys used for free-camera movement: tracked as held, swallowed so the game ignores them
@@ -69,19 +57,7 @@ ZPI_fnc_onKey = {
     if (ZPI_orthoRunning) exitWith { true };   // no input during the orthophoto flight
     if (ZPI_tourRunning && {_key != 199} && {_key != 22} && {_key != 35}) exitWith { true };   // tour: only Home, U, H
     ZPI_keysDown set [_key, true];
-    private _free = ZPI_camMode == "free";
-    if (_key in ZPI_moveKeys) exitWith {
-        // in drone mode the arrows change altitude / radius instead of looking
-        if (!_free) then {
-            switch (_key) do {
-                case 200: { ZPI_cfg_orbitAlt = ZPI_cfg_orbitAlt + 50; call ZPI_fnc_orbitEvent };
-                case 208: { ZPI_cfg_orbitAlt = (ZPI_cfg_orbitAlt - 50) max 100; call ZPI_fnc_orbitEvent };
-                case 203: { ZPI_cfg_orbitRadius = (ZPI_cfg_orbitRadius - 100) max 100; call ZPI_fnc_orbitEvent };
-                case 205: { ZPI_cfg_orbitRadius = ZPI_cfg_orbitRadius + 100; call ZPI_fnc_orbitEvent };
-            };
-        };
-        true
-    };
+    if (_key in ZPI_moveKeys) exitWith { true };
     // Shift+1 ... Shift+0: building fireteam, dismount, two buildings, single file, tank column across fields,
     // tanks firing, long armour column, patrol across fields, patrol on a road, lone building; Shift+- groups down
     if (_shift && {_key in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]}) exitWith { [_key + 11] call ZPI_fnc_runScene; true };
@@ -112,7 +88,6 @@ ZPI_fnc_onKey = {
             else { [] spawn ZPI_fnc_tourDataset };
         };
         case 48: { call ZPI_fnc_barrage };                                  // B
-        case 47: { [["drone", "free"] select (ZPI_camMode == "drone")] call ZPI_fnc_setCamMode };   // V
         case 49: {                                                          // N
             ZPI_cfg_seed = ZPI_cfg_seed + 1;
             if (ZPI_currentScene >= 0) then { [ZPI_currentScene] call ZPI_fnc_runScene } else { [format ["Seed %1", ZPI_cfg_seed]] call ZPI_fnc_msg };
@@ -132,21 +107,8 @@ ZPI_fnc_onKey = {
         case 36: { [true] call ZPI_fnc_viewScene };                         // J: camera to the scene
         case 201: { [1] call ZPI_fnc_zoomStep };                            // PgUp
         case 209: { [-1] call ZPI_fnc_zoomStep };                           // PgDn
-        case 34: {                                                          // G
-            ZPI_gimbalIndex = (ZPI_gimbalIndex + 1) mod (count ZPI_gimbalModes);
-            ["gimbal", format ['{"mode":"%1"}', ZPI_gimbalModes select ZPI_gimbalIndex]] call ZPI_fnc_event;
-            call ZPI_fnc_status;
-        };
-        case 24: {                                                          // O
-            ZPI_orbitPaused = !ZPI_orbitPaused;
-            [["Orbit running", "Orbit paused"] select ZPI_orbitPaused] call ZPI_fnc_msg;
-        };
         case 20: { call ZPI_fnc_nextTime };                                 // T
         case 21: { call ZPI_fnc_nextWeather };                              // Y
-        case 33: {                                                          // F
-            ZPI_cfg_frameCode = !ZPI_cfg_frameCode;
-            if (ZPI_cfg_frameCode) then { call ZPI_fnc_showFrameCode } else { call ZPI_fnc_hideFrameCode };
-        };
         case 22: {                                                          // U
             ZPI_quiet = !ZPI_quiet;
             showChat !ZPI_quiet;
@@ -171,7 +133,7 @@ ZPI_fnc_initKeys = {
     _d displayAddEventHandler ["KeyUp",   { _this call ZPI_fnc_onKeyUp }];
     _d displayAddEventHandler ["MouseMoving", {
         params ["_disp", "_dx", "_dy"];
-        if (ZPI_camActive && {ZPI_camMode == "free"} && {!visibleMap} && {!dialog} && {!ZPI_tourRunning}) then {
+        if (ZPI_camActive && {!visibleMap} && {!dialog} && {!ZPI_tourRunning}) then {
             ZPI_mouseDX = ZPI_mouseDX + _dx;
             ZPI_mouseDY = ZPI_mouseDY + _dy;
         };

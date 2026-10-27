@@ -507,7 +507,7 @@ ZPI_fnc_logRays = {
             private _un = (_i + 0.5) / 9;
             private _vn = (_j + 0.5) / 5;
             private _d = vectorNormalized ((_f vectorAdd (_r vectorMultiply ((2 * _un - 1) * _th))) vectorAdd (_u vectorMultiply ((1 - 2 * _vn) * _tv)));
-            private _hit = lineIntersectsSurfaces [_o, _o vectorAdd (_d vectorMultiply 6000), ZPI_drone, objNull, true, 1, "VIEW", "GEOM"];
+            private _hit = lineIntersectsSurfaces [_o, _o vectorAdd (_d vectorMultiply 6000), objNull, objNull, true, 1, "VIEW", "GEOM"];
             if (_hit isNotEqualTo []) then {
                 (_hit select 0) params ["_pos", "_nrm", "_obj", "_par"];
                 private _ob = if (isNull _par) then { _obj } else { _par };
@@ -580,11 +580,11 @@ ZPI_fnc_doCapture = {
     private _n = ZPI_cfg_labelsPerLine;
     private _parts = (ceil ((count _boxes) / _n)) max 1;
 
-    ["shot", format ['{"image":"%1","ok":%2,"frame":%3,"t_game":%4,"parts":%5,"res":[%6,%7],"cam":{"pos_asl":%8,"x_axis":%9,"y_axis":%10,"z_axis":%11,"hfov":%12,"vfov":%13,"hdg":%14,"pitch":%15,"alt_asl":%16,"alt_agl":%17,"grid":"%18","mode":"%19","bank":%20,"fx":%21,"fy":%22,"proj_check_px":%23}}',
+    ["shot", format ['{"image":"%1","ok":%2,"frame":%3,"t_game":%4,"parts":%5,"res":[%6,%7],"cam":{"pos_asl":%8,"x_axis":%9,"y_axis":%10,"z_axis":%11,"hfov":%12,"vfov":%13,"hdg":%14,"pitch":%15,"alt_asl":%16,"alt_agl":%17,"grid":"%18","bank":%19,"fx":%20,"fy":%21,"proj_check_px":%22}}',
         _jsonName, _ok, diag_frameNo toFixed 0, time toFixed 3, _parts, _W, _H,
         [_o, 3] call ZPI_fnc_v3, [_r, 7] call ZPI_fnc_v3, [_u, 7] call ZPI_fnc_v3, [_f, 7] call ZPI_fnc_v3,
         ZPI_hfov toFixed 6, ZPI_vfov toFixed 6, _hdg toFixed 4, _pitch toFixed 4, (_o select 2) toFixed 2, ((_o select 2) - _gz) toFixed 2,
-        mapGridPosition [_o select 0, _o select 1], ZPI_camMode, _bank toFixed 4,
+        mapGridPosition [_o select 0, _o select 1], _bank toFixed 4,
         ((_W / 2) / _th) toFixed 2, ((_H / 2) / _tv) toFixed 2,
         [_basis, _th, _tv, _W, _H] call ZPI_fnc_projCheck]] call ZPI_fnc_emit;
 

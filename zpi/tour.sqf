@@ -32,7 +32,6 @@ ZPI_fnc_tourAim = {             // [targetASL, azimuth (camera side), elevation 
     private _p = _tp vectorAdd [_h * (sin _az), _h * (cos _az), _dist * (sin _el)];
     private _gz = (getTerrainHeightASL _p) max 0;
     if ((_p select 2) < _gz + 40) then { _p set [2, _gz + 40] };
-    if (ZPI_camMode != "free") then { ["free"] call ZPI_fnc_setCamMode };
     ZPI_camPosASL = _p;
     private _d = vectorNormalized (_tp vectorDiff _p);
     ZPI_yaw   = (_d select 0) atan2 (_d select 1);

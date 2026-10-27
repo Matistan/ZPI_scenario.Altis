@@ -15,7 +15,7 @@ git clone https://github.com/Matistan/ZPI_scenario.Altis
 
 ## Overview
 
-Script-generated scenes with soldiers and armour are filmed by a camera a player flies himself, by a scripted drone orbit, or by the automatic dataset generator.
+Script-generated scenes with soldiers and armour are filmed by a camera a player flies himself or by the automatic dataset generator.
 
 - **P** takes a screenshot and labels it automatically: soldiers by stance (standing, kneeling, prone), tanks, military vehicles, explosions, tank gun fire (`tank_fire`) and buildings.
 - **Home** starts the **dataset generator**: it visits 23 scenes on green, open ground and makes `ZPI_cfg_tourTarget` labelled pictures by itself (1018 per run now: 982 + 1018 = 2000).
@@ -87,20 +87,12 @@ The readout and the crosshair are UI, so they never appear in **P** screenshots:
 
 ## Controls
 
-**Camera.** **V** switches between free camera (the default) and drone orbit.
-
-| Free camera | |
+| Camera | |
 |---|---|
 | W A S D / E Q / Shift | move / up, down / faster |
 | Mouse, arrow keys | look |
 | Mouse wheel, PgUp / PgDn | zoom (presets 75, 45, 30, 15, 8, 4, 2, 1.2°) |
 | **R** | **constant pixel size on/off** (see below) |
-
-| Drone mode | |
-|---|---|
-| G | gimbal: `track`, `scan`, `nadir` |
-| ↑ ↓ / ← → | altitude ±50 m / orbit radius ±100 m |
-| O | pause the orbit |
 
 **Dataset.**
 

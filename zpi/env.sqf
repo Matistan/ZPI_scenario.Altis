@@ -105,12 +105,10 @@ ZPI_fnc_barrage = {
     ZPI_barrageRunning = true;
     private _ammo = ([ZPI_cfg_barrageAmmo, "CfgAmmo"] call ZPI_fnc_validClasses) param [0, "Sh_82mm_AMOS"];
     private _impacts = [];
-    // free camera: around the point you are looking at; drone: around the scene center
+
     private _around = ZPI_center;
-    if (ZPI_camMode == "free") then {
-        private _lp = call ZPI_fnc_lookPoint;
-        if (_lp isNotEqualTo [] && {(ZPI_camPosASL distance _lp) < 4000}) then { _around = [_lp select 0, _lp select 1, 0] };
-    };
+    private _lp = call ZPI_fnc_lookPoint;
+    if (_lp isNotEqualTo [] && {(ZPI_camPosASL distance _lp) < 4000}) then { _around = [_lp select 0, _lp select 1, 0] };
     for "_i" from 1 to ZPI_cfg_barrageCount do { _impacts pushBack ([_around] call ZPI_fnc_safeImpactPos) };
     ["barrage", format ['{"ammo":"%1","count":%2}', _ammo, count _impacts]] call ZPI_fnc_event;
     ["Barrage incoming"] call ZPI_fnc_msg;
