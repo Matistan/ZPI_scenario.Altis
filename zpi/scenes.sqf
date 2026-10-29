@@ -932,6 +932,6 @@ ZPI_fnc_runScene = {
     ["scene_start", format ['{"key":%1,"center":%2}', _n, [ZPI_center, 1] call ZPI_fnc_v3]] call ZPI_fnc_event;
     [ZPI_center] call ((ZPI_scenes select _n) select 1);
     ["scene_ready", format ['{"objects":%1,"props":%2}', count ZPI_entities, count ZPI_sceneStatics]] call ZPI_fnc_event;
-    [false] call ZPI_fnc_viewScene;      // free camera: jump to the scene if it is out of view
+    [false] call ZPI_fnc_viewScene;      // jump to the scene if it is out of view
     [format ["Scene %1 '%2', seed %3, region %4: %5 objects", _n, ZPI_sceneName, ZPI_cfg_seed, ZPI_regionId, count ZPI_entities]] call ZPI_fnc_msg;
 };

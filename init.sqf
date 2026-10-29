@@ -40,10 +40,7 @@ ZPI_center       = [0, 0, 0];
     { ZPI_negatives set [_x, [ZPI_negatives get _x] call ZPI_fnc_validClasses] } forEach ["people", "cars", "wrecks"];
 
     // ---- world ----
-    setViewDistance ZPI_cfg_viewDistance;
-    setObjectViewDistance [ZPI_cfg_objectViewDist, 100];
-    setTerrainGrid ZPI_cfg_terrainGrid;
-    enableEnvironment [ZPI_cfg_ambientLife, true];
+    enableEnvironment [false, true];
     enableSaving [false, false];
     enableSentences false;
     enableRadio false;
@@ -74,7 +71,5 @@ ZPI_center       = [0, 0, 0];
     addMissionEventHandler ["EachFrame", { call ZPI_fnc_onFrame }];
 
     if (ZPI_cfg_startScene >= 0) then { [ZPI_cfg_startScene] call ZPI_fnc_runScene };
-    // the engine resets the aperture at mission start: set the fixed exposure a moment later
-    [] spawn { sleep 1; call ZPI_fnc_applyAperture };
     call ZPI_fnc_showHelp;
 };

@@ -34,23 +34,14 @@ ZPI_fnc_nextLocation = {
     [ZPI_locations select _i, _i] call ZPI_fnc_setCenter;
 };
 
-ZPI_fnc_applyAperture = {
-    private _a = ZPI_cfg_aperture;
-    if (_a > 0 && {ZPI_timeIndex == ZPI_cfg_tourTime} && {ZPI_weatherIndex == ZPI_cfg_tourWeather}) then {
-        setAperture _a;
-    } else {
-        setAperture -1;
-    };
-};
-
 // ---- time of day -------------------------------------------------------------
-ZPI_timePresets = [[6, 0, "dawn"], [12, 0, "noon"], [17, 30, "afternoon"], [23, 0, "night"]];
+ZPI_timePresets = [[6, 0, "dawn", 60], [12, 0, "noon", 180], [17, 30, "afternoon", 180], [23, 0, "night", -1]];
 ZPI_timeIndex = 1;
 ZPI_fnc_applyTime = {
-    (ZPI_timePresets select ZPI_timeIndex) params ["_hh", "_mm", "_label"];
+    (ZPI_timePresets select ZPI_timeIndex) params ["_hh", "_mm", "_label", "_aperture"];
     setDate [2035, 6, 15, _hh, _mm];
     ["time", format ['{"label":"%1","hour":%2,"minute":%3}', _label, _hh, _mm]] call ZPI_fnc_event;
-    call ZPI_fnc_applyAperture;
+    setAperture _aperture;
     [format ["Time: %1 (%2:%3%4)", _label, _hh, ["", "0"] select (_mm < 10), _mm]] call ZPI_fnc_msg;
 };
 
@@ -74,7 +65,6 @@ ZPI_fnc_applyWeather = {
     999999 setFog _fog;
     999999 setRain _rain;
     ["weather", format ['{"label":"%1","overcast":%2,"fog":%3,"rain":%4}', _label, _oc, _fog, _rain]] call ZPI_fnc_event;
-    call ZPI_fnc_applyAperture;
     [format ["Weather: %1", _label]] call ZPI_fnc_msg;
 };
 

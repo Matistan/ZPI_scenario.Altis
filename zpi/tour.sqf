@@ -416,7 +416,10 @@ ZPI_fnc_tourDataset = {
     if (ZPI_cfg_seed > 16000) then { ZPI_cfg_seed = 1000 };          // seeds stay exact in 32-bit floats
     ["tour_start", format ['{"target":%1,"burst":%2,"interval":%3,"max_buildings":%4,"first_seed":%5}',
         _target, ZPI_cfg_burstShots, ZPI_cfg_burstInterval, ZPI_cfg_maxBuildings, ZPI_cfg_seed]] call ZPI_fnc_event;
-    [format ["Dataset generator: %1 images, clear weather, noon, aperture %2 (Home stops)", _target, ZPI_cfg_aperture]] call ZPI_fnc_msg;
+    [format [
+        "Dataset generator: %1 images, weather: %2, time: %3, aperture %4 (Home stops)", _target,
+        (ZPI_weatherPresets select ZPI_cfg_tourWeather) select 0, (ZPI_timePresets select ZPI_cfg_tourTime) select 3, apertureParams select 0
+    ]] call ZPI_fnc_msg;
     private _locs = [];
     for "_l" from 0 to ((count ZPI_locations) - 1) do { _locs pushBack _l };
 

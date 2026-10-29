@@ -18,7 +18,7 @@ ZPI_orthoRunning = false;
 
 ZPI_fnc_orthoCapture = {
     if (ZPI_orthoRunning) exitWith { ["Orthophoto already running"] call ZPI_fnc_msg };
-    if (ZPI_capState > 0 || {ZPI_camLock} || {!ZPI_camActive}) exitWith { ["Busy (capture in progress), try again"] call ZPI_fnc_msg };
+    if (ZPI_capState > 0 || {ZPI_camLock}) exitWith { ["Busy (capture in progress), try again"] call ZPI_fnc_msg };
     ZPI_orthoRunning = true;
     [] spawn {
         // ---- save the current view, hold everything still ----

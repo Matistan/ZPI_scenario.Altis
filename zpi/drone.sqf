@@ -7,7 +7,6 @@
 // =====================================================================
 
 ZPI_lastTick    = 0;
-ZPI_camActive   = false;
 ZPI_frozen      = false;   // true while a capture is being taken
 ZPI_camLock     = false;   // camera pose held still (explosion reference shots, orthophoto)
 ZPI_fovLock     = false;   // zoom held still (explosion reference shots)
@@ -29,7 +28,7 @@ ZPI_camPosASL   = [0, 0, 0];
 ZPI_camDir      = [0, 1, 0];
 ZPI_camUp       = [0, 0, 1];
 
-// free camera state
+// camera state
 ZPI_yaw         = 0;       // deg, compass
 ZPI_pitch       = -30;     // deg, negative = looking down
 ZPI_camVel      = [0, 0, 0];
@@ -53,11 +52,11 @@ ZPI_fnc_applyCamPose = {
     ZPI_cam setVectorDirAndUp [ZPI_camDir, ZPI_camUp];
 };
 
-// ---- free camera ------------------------------------------------------------------
+// ---- camera ------------------------------------------------------------------
 // WASD move, E/Q up/down, Shift = fast, mouse = look, wheel = zoom, arrows = look.
 ZPI_fnc_keyHeld = { params ["_dik"]; ZPI_keysDown getOrDefault [_dik, false] };
 
-ZPI_fnc_updateFreeCam = {
+ZPI_fnc_updateCam = {
     params ["_dt"];
     private _fovScale = (ZPI_hfov / 60) max 0.03;
 
@@ -85,13 +84,13 @@ ZPI_fnc_updateFreeCam = {
     private _ground = (getTerrainHeightASL ZPI_camPosASL) max 0;
     private _agl = (ZPI_camPosASL select 2) - _ground;
     private _fast = ([42] call ZPI_fnc_keyHeld) || {[54] call ZPI_fnc_keyHeld};
-    private _speed = (((_agl * 0.5) max ZPI_cfg_freeMinSpeed) min ZPI_cfg_freeMaxSpeed) * ([1, ZPI_cfg_freeFastMul] select _fast);
+    private _speed = (((_agl * 0.5) max ZPI_cfg_MinSpeed) min ZPI_cfg_MaxSpeed) * ([1, ZPI_cfg_FastMul] select _fast);
     private _fwd   = [sin ZPI_yaw, cos ZPI_yaw, 0];
     private _right = [cos ZPI_yaw, -(sin ZPI_yaw), 0];
     private _vWant = ((_fwd vectorMultiply (_in select 1)) vectorAdd (_right vectorMultiply (_in select 0))) vectorMultiply _speed;
     _vWant set [2, (_in select 2) * _speed * 0.6];
     // exponential smoothing = no sudden starts/stops
-    ZPI_camVel = ZPI_camVel vectorAdd ((_vWant vectorDiff ZPI_camVel) vectorMultiply (1 - exp (-ZPI_cfg_freeSmoothing * _dt)));
+    ZPI_camVel = ZPI_camVel vectorAdd ((_vWant vectorDiff ZPI_camVel) vectorMultiply (1 - exp (-ZPI_cfg_Smoothing * _dt)));
     private _p = ZPI_camPosASL vectorAdd (ZPI_camVel vectorMultiply _dt);
     _p set [2, (_p select 2) max (((getTerrainHeightASL _p) max 0) + 2)];
 
@@ -113,11 +112,10 @@ ZPI_fnc_centerInView = {
     (ZPI_camPosASL distance2D _c) < 2500 && {(worldToScreen [_c select 0, _c select 1, 2]) isNotEqualTo []}
 };
 
-// Free camera: jump to a viewpoint looking at the scene center.
+// Camera: jump to a viewpoint looking at the scene center.
 // _force = false: only when the scene is out of view or far away.
 ZPI_fnc_viewScene = {
     params [["_force", false]];
-    if (!ZPI_camActive) exitWith {};
     if (!_force && {call ZPI_fnc_centerInView}) exitWith {};
     private _c  = ZPI_center;
     private _gz = getTerrainHeightASL _c;
@@ -137,25 +135,11 @@ ZPI_fnc_viewScene = {
 ZPI_fnc_createCamera = {
     ZPI_cam = "camera" camCreate [0, 0, 0];
     [ZPI_cfg_startFov] call ZPI_fnc_setFov;
-    [true] call ZPI_fnc_setCamActive;
+    showCinemaBorder false;
+    ZPI_cam cameraEffect ["internal", "back"];
+    call ZPI_fnc_showHud;
+    cameraEffectEnableHUD false;
     [true] call ZPI_fnc_viewScene;
-};
-
-ZPI_fnc_setCamActive = {
-    params ["_on"];
-    if (_on) then {
-        showCinemaBorder false;
-        ZPI_cam cameraEffect ["internal", "back"];
-        cameraEffectEnableHUD false;
-        ZPI_camActive = true;
-        if (!ZPI_quiet) then {
-            call ZPI_fnc_showHud;
-        };
-    } else {
-        ZPI_cam cameraEffect ["terminate", "back"];
-        call ZPI_fnc_hideHud;
-    };
-    ZPI_camActive = _on;
 };
 
 // ---- FOV ---------------------------------------------------------------------------
@@ -220,8 +204,7 @@ ZPI_fnc_updateFrameCode = {
 };
 
 // ---- camera basis of the frame actually rendered ----------------------------------------
-// Axes from points 1 km along each camera axis, then normalized: with 1 m offsets
-// (the old method) every component came out as a multiple of 1/1024 (float32 at ~13 km).
+// Axes from points 1 km along each camera axis, then normalized
 ZPI_fnc_camBasis = {            // -> [originASL, right, up, forward] (unit vectors)
     private _o = AGLToASL (positionCameraToWorld [0, 0, 0]);
     private _L = 1000;
@@ -339,7 +322,7 @@ ZPI_fnc_updateHud = {
     private _lock = if (ZPI_scaleLock) then { format ["  SCALE LOCK %1", ZPI_targetGSD toFixed 3] } else { "" };
     private _hold = if (ZPI_camLock) then { "  [CAMERA HELD]" } else { "" };
     // ground type under the crosshair + buildings that would be labelled (every 30 frames)
-    if (diag_frameNo % 30 < ZPI_cfg_hudEvery) then {
+    if (diag_frameNo % 30 == 0) then {
         ZPI_hudBld = call ZPI_fnc_buildingsInView;
         ZPI_hudGround = if (ZPI_laserRange > 0) then {
             format ["%1 (green %2)", surfaceType ZPI_laserPos, ([ZPI_laserPos] call ZPI_fnc_surfaceGreen) toFixed 1]
@@ -356,26 +339,19 @@ ZPI_fnc_updateHud = {
 // ---- per-frame loop -------------------------------------------------------------
 ZPI_fnc_onFrame = {
     if (isGamePaused) exitWith { ZPI_lastTick = diag_tickTime };
-    private _rdt = ((diag_tickTime - ZPI_lastTick) max 0) min 0.1;   // real time, for the free camera
+    private _rdt = ((diag_tickTime - ZPI_lastTick) max 0) min 0.1;   // real time, for the camera
     ZPI_lastTick = diag_tickTime;
 
-    if (!ZPI_frozen && {!ZPI_camLock} && {ZPI_camActive}) then {
-        [_rdt] call ZPI_fnc_updateFreeCam;
+    if (!ZPI_frozen && {!ZPI_camLock}) then {
+        [_rdt] call ZPI_fnc_updateCam;
         call ZPI_fnc_applyCamPose;
-    };
-    if (!ZPI_camActive) exitWith {
-        if (ZPI_cfg_gtEvery > 0 && {diag_frameNo % ZPI_cfg_gtEvery == 0}) then {
-            call ZPI_fnc_logGT;
-        };
     };
     call ZPI_fnc_updateLaser;
     [_rdt] call ZPI_fnc_updateScaleLock;
     call ZPI_fnc_captureTick;
     call ZPI_fnc_buildingTick;
-    if (diag_frameNo % ZPI_cfg_hudEvery == 0) then {
-        call ZPI_fnc_updateHud;
-    };
     if (!ZPI_quiet) then {
+        call ZPI_fnc_updateHud;
         call ZPI_fnc_updateFrameCode;
     };
     if (ZPI_cfg_telemetryEvery > 0 && {diag_frameNo % ZPI_cfg_telemetryEvery == 0}) then {

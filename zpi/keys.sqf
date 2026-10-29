@@ -5,7 +5,7 @@
 ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br/>"
     + "<t align='left'>"
     + "<t color='#ffd27a'>CAMERA</t><br/>"
-    + "Free: WASD move, E up, Q down, Shift fast<br/>"
+    + "WASD move, E up, Q down, Shift fast<br/>"
     + "Mouse look, wheel zoom, arrows look<br/>"
     + "PgUp / PgDn zoom presets (75 ... 1.2 deg)<br/>"
     + "R constant pixel size on/off (zoom follows range)<br/><br/>"
@@ -41,19 +41,18 @@ ZPI_fnc_showHelp = {
     [] spawn { sleep 10; hintSilent "" };
 };
 
-// keys used for free-camera movement: tracked as held, swallowed so the game ignores them
+// keys used for camera movement: tracked as held, swallowed so the game ignores them
 ZPI_moveKeys = [17, 30, 31, 32, 16, 18, 42, 54, 200, 203, 205, 208];
 
 ZPI_fnc_onKeyUp = {
     params ["_disp", "_key"];
     ZPI_keysDown set [_key, false];
-    _key in ZPI_moveKeys && {ZPI_camActive}
+    _key in ZPI_moveKeys
 };
 
 ZPI_fnc_onKey = {
     params ["_disp", "_key", "_shift", "_ctrl", "_alt"];
     if (_ctrl || _alt || visibleMap || dialog) exitWith { false };
-    if (!ZPI_camActive) exitWith { false };
     if (ZPI_orthoRunning) exitWith { true };   // no input during the orthophoto flight
     if (ZPI_tourRunning && {_key != 199} && {_key != 22} && {_key != 35}) exitWith { true };   // tour: only Home, U, H
     ZPI_keysDown set [_key, true];
@@ -133,14 +132,14 @@ ZPI_fnc_initKeys = {
     _d displayAddEventHandler ["KeyUp",   { _this call ZPI_fnc_onKeyUp }];
     _d displayAddEventHandler ["MouseMoving", {
         params ["_disp", "_dx", "_dy"];
-        if (ZPI_camActive && {!visibleMap} && {!dialog} && {!ZPI_tourRunning}) then {
+        if (!visibleMap && {!dialog} && {!ZPI_tourRunning}) then {
             ZPI_mouseDX = ZPI_mouseDX + _dx;
             ZPI_mouseDY = ZPI_mouseDY + _dy;
         };
     }];
     _d displayAddEventHandler ["MouseZChanged", {
         params ["_disp", "_z"];
-        if (ZPI_camActive && {!visibleMap} && {!dialog} && {!ZPI_tourRunning}) then { [_z] call ZPI_fnc_wheelZoom };
+        if (!visibleMap && {!dialog} && {!ZPI_tourRunning}) then { [_z] call ZPI_fnc_wheelZoom };
     }];
     addMissionEventHandler ["MapSingleClick", {
         params ["_units", "_pos", "_alt", "_shift"];

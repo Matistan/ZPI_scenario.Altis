@@ -540,7 +540,7 @@ ZPI_burstId  = 0;                // burst counter (generator); pictures of one b
 ZPI_burstIdx = -1;               // index inside the current burst, -1 = not in a burst
 ZPI_burstLen = 0;
 ZPI_fnc_startCapture = {
-    if (ZPI_capState > 0 || {!ZPI_camActive}) exitWith {};
+    if (ZPI_capState > 0) exitWith {};
     ZPI_frozen = true;
     ZPI_capFrozen = [];
     {
@@ -599,7 +599,7 @@ ZPI_fnc_doCapture = {
         ZPI_scaleLock, ZPI_targetGSD toFixed 4, _ref, call ZPI_fnc_occupancyJson,
         [-1, ZPI_burstId] select (ZPI_burstIdx >= 0), ZPI_burstIdx, ZPI_burstLen,
         if (ZPI_laserRange > 0) then { surfaceType ZPI_laserPos } else { "" },
-        str fogParams, overcast toFixed 3, ZPI_cfg_aperture]] call ZPI_fnc_emit;
+        str fogParams, overcast toFixed 3, apertureParams select 0]] call ZPI_fnc_emit;
 
     [_jsonName, _basis, _th, _tv] call ZPI_fnc_logTerrain;   // DEM patch under the view
     [_jsonName, _basis, _th, _tv] call ZPI_fnc_logRays;      // what each of 9 x 5 image points really hits
@@ -747,7 +747,7 @@ ZPI_eventCapture     = true;    // I toggles
 
 ZPI_fnc_onScreen = {            // [posASL] -> inside the picture and not too far
     params ["_p"];
-    if (!ZPI_camActive || {(ZPI_camPosASL vectorDistance _p) > ZPI_cfg_maxLabelDist}) exitWith { false };
+    if ((ZPI_camPosASL vectorDistance _p) > ZPI_cfg_maxLabelDist) exitWith { false };
     // worldToScreen also returns coordinates for points outside the picture: check the edges
     private _s = worldToScreen (ASLToAGL _p);
     count _s == 2 && {(_s select 0) > safeZoneX} && {(_s select 0) < safeZoneX + safeZoneW}

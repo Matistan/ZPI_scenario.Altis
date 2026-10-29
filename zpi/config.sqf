@@ -24,17 +24,15 @@ ZPI_cfg_targetGSD    = 0.010;    // m/px -> standing soldier ~180 px from the si
 ZPI_cfg_gsdLimits    = [0.004, 0.5];
 ZPI_cfg_scaleLockRate = 4;       // how fast the zoom follows range changes (1/s)
 
-ZPI_cfg_hudEvery     = 3;        // update every N frames
-
-// ---- free camera (V switches free <-> drone) ------------------------------------
+// ---- camera ------------------------------------
 ZPI_cfg_mouseSens     = 0.05;    // deg per mouse unit at 60 deg FOV (scaled down when zoomed in)
 ZPI_cfg_keyLookRate   = 60;      // deg/s for arrow-key look at 60 deg FOV
-ZPI_cfg_freeMinSpeed  = 10;      // m/s; speed grows with height above ground ...
-ZPI_cfg_freeMaxSpeed  = 200;     // ... up to this
-ZPI_cfg_freeFastMul   = 4;       // Shift multiplier
-ZPI_cfg_freeSmoothing = 6;       // higher = snappier, lower = smoother movement
+ZPI_cfg_MinSpeed      = 10;      // m/s; speed grows with height above ground ...
+ZPI_cfg_MaxSpeed      = 200;     // ... up to this
+ZPI_cfg_FastMul       = 4;       // Shift multiplier
+ZPI_cfg_Smoothing     = 6;       // higher = snappier, lower = smoother movement
 ZPI_cfg_wheelStep     = 0.9;     // FOV multiplier per mouse-wheel step
-ZPI_cfg_viewDist      = 500;     // m: when a scene is out of view, the free camera jumps this far from it ...
+ZPI_cfg_viewDist      = 500;     // m: when a scene is out of view, the camera jumps this far from it ...
 ZPI_cfg_viewHeight    = 250;     // ... and this high above it, looking at the scene
 
 // ---- dataset capture (P = shot, Shift+P = auto) -------------------------------------
@@ -49,7 +47,7 @@ ZPI_cfg_soldierPartPad  = 0.03;  // m around each body part (uniform, vest)
 ZPI_cfg_soldierHelmet   = 0.08;  // m added above the head (helmet)
 ZPI_cfg_soldierBackpack = 0.22;  // m added behind the back when he carries a backpack
 ZPI_cfg_labelBuildings = true;   // every building in the picture gets a "building" box
-ZPI_cfg_labelsPerLine = 3;     // boxes per log line (log lines over ~1000 characters may get cut off)
+ZPI_cfg_labelsPerLine = 3;       // boxes per log line (log lines over ~1000 characters may get cut off)
 // explosion label size by ammo power: [radius m, height m, duration s]
 ZPI_cfg_expLarge  = [9, 14, 3];
 ZPI_cfg_expMedium = [5, 8, 2.5];
@@ -119,9 +117,6 @@ ZPI_cfg_tourElevSoldier = [35, 60];      // soldier shots: lower, so more of the
 ZPI_cfg_tourElevPatrol = [30, 45];       // walking patrols and kneeling / prone groups: flatter, more from the side
 ZPI_cfg_tourElevColumn = [30, 60];       // driving columns: from the side as well as from above
 
-// ---- exposure ------------------------------------------------------------------------------
-ZPI_cfg_aperture = 180;   // higher = darker
-
 // ---- bursts: the camera stays put and shoots every N seconds ------------------------------
 // Movement shows up between the pictures of one burst; then the camera moves on.
 // Burst pictures are named <scene>_b<burst>_<n>_<frame>.png and the JSON has "burst".
@@ -164,12 +159,6 @@ ZPI_cfg_convoySpeed     = 20;    // km/h, slow enough that a burst shows the col
 ZPI_cfg_telemetryEvery = 1;      // telemetry every N frames (0 = off)
 ZPI_cfg_gtEvery        = 10;     // ground-truth positions every N frames (0 = off)
 ZPI_cfg_gtMaxPerLine   = 12;     // objects per log line (keeps RPT lines short)
-
-// ---- world -----------------------------------------------------------------
-ZPI_cfg_viewDistance   = 4000;
-ZPI_cfg_objectViewDist = 3000;
-ZPI_cfg_terrainGrid    = 3.125;  // terrain detail: 3.125 = finest (Ultra), 6.25 = Very high, 12.5 = Standard
-ZPI_cfg_ambientLife    = false;  // rabbits/birds off = cleaner ground truth
 
 // ---- factions (base game only; missing classes are dropped at start) --------
 ZPI_factions = createHashMapFromArray [
