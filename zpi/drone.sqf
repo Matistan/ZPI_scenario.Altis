@@ -107,16 +107,11 @@ ZPI_fnc_lookPoint = {
     (_hits select 0) select 0
 };
 
-ZPI_fnc_centerInView = {
-    private _c = ZPI_center;
-    (ZPI_camPosASL distance2D _c) < 2500 && {(worldToScreen [_c select 0, _c select 1, 2]) isNotEqualTo []}
-};
-
 // Camera: jump to a viewpoint looking at the scene center.
 // _force = false: only when the scene is out of view or far away.
 ZPI_fnc_viewScene = {
     params [["_force", false]];
-    if (!_force && {call ZPI_fnc_centerInView}) exitWith {};
+    if (!_force && {[AGLToASL [ZPI_center select 0, ZPI_center select 1, 2]] call ZPI_fnc_onScreen}) exitWith {};
     private _c  = ZPI_center;
     private _gz = getTerrainHeightASL _c;
     private _bear = if ((ZPI_camPosASL distance2D _c) > 1) then { ZPI_camPosASL getDir _c } else { ZPI_yaw };
@@ -131,7 +126,6 @@ ZPI_fnc_viewScene = {
     call ZPI_fnc_applyCamPose;
 };
 
-// ---- camera object ------------------------------------------------------------
 ZPI_fnc_createCamera = {
     ZPI_cam = "camera" camCreate [0, 0, 0];
     [ZPI_cfg_startFov] call ZPI_fnc_setFov;
