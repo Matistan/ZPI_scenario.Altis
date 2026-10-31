@@ -3,15 +3,17 @@
 ## Setup
 
 1. In the Arma 3 Launcher, go to **Parameters → Advanced** and tick **Show Script Errors**. Leave **No Logs** unticked: the labels are written to the logs.
-2. In the video options, set **HDR quality** to **Standard** and turn **Bloom** off.
+2. Clone the repository into your Arma 3 missions folder. On Windows, in a terminal:
 
-3. Clone the repository into your Arma 3 missions folder. On Windows, in a terminal:
 ```
 cd "%USERPROFILE%\Documents\Arma 3\missions"
 git clone https://github.com/Matistan/ZPI_scenario.Altis
 ```
-4. Install Python and the tools' packages: `python -m pip install -r ZPI_scenario.Altis\tools\requirements.txt`
+
+3. Install Python and the tools' packages: `python -m pip install -r ZPI_scenario.Altis\tools\requirements.txt`
+4. Raise the screenshot folder limit: add `maxScreenShotFolderSizeMB = 20000;` to `Documents\Arma 3\<profile>.Arma3Profile`, with the game closed.
 5. Start Arma, open Eden Editor, open ZPI scenario: **Scenario → Open → ZPI_scenario** and click **Play in Singleplayer**.
+6. Change video settings: set ultra overall quality, set **HDR quality** to **Standard** and turn **Bloom** off. You can also increase the **Sampling** to 200 % for 4K screenshots, but that only helps when training on tiles.
 
 ## Overview
 
@@ -387,11 +389,6 @@ Every frame the mission logs the camera pose, FOV, laser range and platform posi
    frame = enhance(frame)               # PIL image in, PIL image out
    ```
    To try it on single pictures: `python tools\zpi_enhance.py shot.png --compare` (writes a before/after JPEG).
-
-Game settings:
-- Ultra textures, objects and terrain; HDR at the higher setting; FSAA or SMAA on; rotation blur, radial blur and depth of field off.
-- Sampling 200 % gives 4K screenshots. That only helps when training on tiles.
-- Raise the screenshot folder limit: add `maxScreenShotFolderSizeMB = 20000;` to `Documents\Arma 3\<profile>.Arma3Profile`, with the game closed.
 
 ## Status
 

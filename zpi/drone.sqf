@@ -140,7 +140,7 @@ ZPI_fnc_createCamera = {
 // camSetFov takes Arma's fovTop: zoom = 4/3 * tan(hfov/2) / AR, and vfov follows from square pixels.
 ZPI_fnc_setFov = {
     params ["_deg"];
-    ZPI_hfov = (_deg max 0.5) min 100;
+    ZPI_hfov = (_deg max 1.6) min 100;
     private _res = getResolution;
     private _ar = (_res select 0) / (_res select 1);
     ZPI_vfov = 2 * atan ((tan (ZPI_hfov / 2)) / _ar);

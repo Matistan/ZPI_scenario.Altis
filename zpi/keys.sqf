@@ -53,7 +53,7 @@ ZPI_fnc_onKeyUp = {
 
 ZPI_fnc_onKey = {
     params ["_disp", "_key", "_shift", "_ctrl", "_alt"];
-    if (_ctrl || _alt || visibleMap || dialog) exitWith { false };
+    if (_ctrl || _alt) exitWith { false };
     if (ZPI_orthoRunning) exitWith { true };   // no input during the orthophoto flight
     if (ZPI_tourRunning && {_key != 199} && {_key != 22} && {_key != 35}) exitWith { true };   // tour: only Home, U, H
     ZPI_keysDown set [_key, true];
@@ -131,17 +131,23 @@ ZPI_fnc_onKey = {
 
 ZPI_fnc_initKeys = {
     private _d = findDisplay 46;
-    _d displayAddEventHandler ["KeyDown", { _this call ZPI_fnc_onKey }];
-    _d displayAddEventHandler ["KeyUp",   { _this call ZPI_fnc_onKeyUp }];
-    _d displayAddEventHandler ["MouseMoving", {
-        params ["_disp", "_dx", "_dy"];
-        if (!visibleMap && {!dialog} && {!ZPI_tourRunning}) then {
-            ZPI_mouseDX = ZPI_mouseDX + _dx;
-            ZPI_mouseDY = ZPI_mouseDY + _dy;
-        };
-    }];
-    _d displayAddEventHandler ["MouseZChanged", {
-        params ["_disp", "_z"];
-        if (!visibleMap && {!dialog} && {!ZPI_tourRunning}) then { [_z] call ZPI_fnc_wheelZoom };
-    }];
+    if ((uiNamespace getVariable ["ZPI_keyDisplay", displayNull]) isEqualTo _d) then {
+        { _d displayRemoveEventHandler _x } forEach (uiNamespace getVariable ["ZPI_keyHandlers", []]);
+    };
+    uiNamespace setVariable ["ZPI_keyDisplay", _d];
+    uiNamespace setVariable ["ZPI_keyHandlers", [
+        ["KeyDown", _d displayAddEventHandler ["KeyDown", { _this call ZPI_fnc_onKey }]],
+        ["KeyUp",   _d displayAddEventHandler ["KeyUp",   { _this call ZPI_fnc_onKeyUp }]],
+        ["MouseMoving", _d displayAddEventHandler ["MouseMoving", {
+            params ["_disp", "_dx", "_dy"];
+            if (!ZPI_tourRunning) then {
+                ZPI_mouseDX = ZPI_mouseDX + _dx;
+                ZPI_mouseDY = ZPI_mouseDY + _dy;
+            };
+        }]],
+        ["MouseZChanged", _d displayAddEventHandler ["MouseZChanged", {
+            params ["_disp", "_z"];
+            if (!ZPI_tourRunning) then { [_z] call ZPI_fnc_wheelZoom };
+        }]]
+    ]];
 };

@@ -8,14 +8,6 @@ ZPI_cfg_faction      = "CSAT";   // target faction: "CSAT" | "NATO" | "AAF"
 ZPI_cfg_seed         = 1;        // base seed; same seed + same location = same layout (N key = seed+1)
 ZPI_cfg_startScene   = 6;        // scene launched at mission start (-1 = none)
 
-// ---- camera ------------------------------------------------------------
-// Horizontal FOV presets in degrees (PgUp / PgDn). camSetFov is computed from the preset.
-// Steps modelled on real drone gimbals (horizontal FOV): small-UAS wide camera ~75 deg,
-// MALE-class EO zoom (e.g. WESCAM MX-15) about 31 down to 1.2 deg.
-ZPI_cfg_fovPresets   = [75, 45, 30, 15, 8, 4, 2, 1.2];
-ZPI_cfg_startFov     = 30;       // deg, horizontal FOV at mission start
-
-
 // ---- constant pixel size (R toggles): zoom follows the laser range ---------------------
 // GSD = ground sample distance = metres per pixel at the point in the middle of the screen.
 // With the lock on, every screenshot has the same scale: a standing soldier (1.8 m) is
@@ -34,6 +26,8 @@ ZPI_cfg_Smoothing     = 6;       // higher = snappier, lower = smoother movement
 ZPI_cfg_wheelStep     = 0.9;     // FOV multiplier per mouse-wheel step
 ZPI_cfg_viewDist      = 500;     // m: when a scene is out of view, the camera jumps this far from it ...
 ZPI_cfg_viewHeight    = 250;     // ... and this high above it, looking at the scene
+ZPI_cfg_fovPresets   = [100, 75, 45, 30, 15, 8, 4, 2, 1.6];
+ZPI_cfg_startFov     = 30;       // deg, horizontal FOV at mission start
 
 // ---- dataset capture (P = shot, Shift+P = auto) -------------------------------------
 ZPI_cfg_autoInterval  = 2;       // s between automatic captures
