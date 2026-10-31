@@ -87,39 +87,41 @@ The readout and the crosshair are UI, so they never appear in **P** screenshots:
 
 ## Controls
 
-| Camera | |
+**Camera:**
+
+| Key | Action |
 |---|---|
 | W A S D / E Q / Shift | move / up, down / faster |
 | Mouse, arrow keys | look |
 | Mouse wheel, PgUp / PgDn | zoom (presets 75, 45, 30, 15, 8, 4, 2, 1.2°) |
-| **R** | **constant pixel size on/off** (see below) |
+| R | constant pixel size on/off (see below) |
 
-**Dataset.**
-
-| Key | Action |
-|---|---|
-| **P** | screenshot + labels + JSON |
-| **Shift+P** | auto-capture every 2 s on/off |
-| **K** | firefight on/off: every 4 s, 2 vehicles and 4 soldiers fire at clear ground, so the shells explode in the picture |
-| **Shift+K** | one volley |
-| **B** | artillery barrage around the point you are looking at |
-| **I** | automatic screenshot when an explosion happens on screen, on/off (default on) |
-| **Z** | orthophoto of the scene area (takes about a minute; no input during the flight) |
-| **Home** | **dataset generator**: makes 1000 labelled images by itself (clear weather, noon). Home again stops it |
-
-**Scenes.**
+**Dataset:**
 
 | Key | Action |
 |---|---|
-| 1–9, 0 | scenes (below) |
-| **- (minus)** | building scene |
-| **Shift+1 … Shift+0**, **Shift+-**, **Shift+[ ] \\ ; '** | more building scenes, tank columns, tanks firing, patrols, groups kneeling / prone, tank escort, infantry spread out, wheeled convoy, motor pool, clutter (below) |
+| P | screenshot + labels + JSON |
+| Shift+P | auto-capture every 2 s on/off |
+| K | firefight on/off: every 4 s, 2 vehicles and 4 soldiers fire at clear ground, so the shells explode in the picture |
+| Shift+K | one volley |
+| B | artillery barrage around the point you are looking at |
+| I | automatic screenshot when an explosion happens on screen, on/off (default on) |
+| Z | orthophoto of the scene area (takes about a minute; no input during the flight) |
+| **Home** | **dataset generator:** makes 1000 labelled images by itself (clear weather, noon). Home again stops it |
+
+**Scenes:**
+
+| Key | Action |
+|---|---|
+| 0–9, - [ ], Shift + (0-9, - [ ] ; ' \\) | scenes (below) |
 | N | new layout (seed + 1) |
 | X | clear |
-| L / Alt+click on map / C | next marker location / clicked point / point in the middle of the screen |
+| L | next marker location |
+| C | move scene to the middle of the screen |
 | J | jump the camera to the scene |
 | T / Y | time of day / weather |
-| F / U / H | frame-number bar / quiet mode (no text, no HUD) / help |
+| U | quiet mode (no text, no HUD) |
+| H | help |
 
 ## Scenes
 
@@ -300,7 +302,7 @@ There is one file per screenshot, with the same name as the image:
 | `objects[].ground_pos_asl` | where the object stands: a soldier's feet (floor height inside buildings), the terrain under a vehicle's or building's centre, an explosion's impact point; cm precision |
 | `objects[].ground_px` | that ground point projected into the image, in pixels (the keypoint of `--pose` labels) |
 
-Why the precision changed: map positions near 13 km are only exact to about 1 mm in the game's 32-bit floats. The old camera axes were measured over 1 m, so every component came out as a multiple of 1/1024 (up to ~4 px error at long range). The FOV was measured over 0.1 m, which gave about 1 % FOV error (hfov and vfov disagreed by 0.9 %). Both are now measured over 1–5 km. Labels use the same camera model, so boxes got slightly more exact too.
+Why the precision changed: map positions near 13 km are only exact to about 1 mm in the game's 32-bit floats. The camera axes are measured over 1 km, and the FOV is computed exactly from the FOV setting and the screen aspect ratio. Labels use the same camera model, so boxes got slightly more exact too.
 
 ## Orthophoto (Z)
 
@@ -410,7 +412,7 @@ Game settings:
 
 **Check after changing things:**
 1. **HUD** missing after an update: re-open the mission in Eden (`description.ext` is only read then).
-2. **Building scenes** say "No enterable building with few others around": move the scene (C or Alt+click) near a farm or lone house.
+2. **Building scenes** say "No enterable building with few others around": move the scene (L or C) near a farm or lone house.
 3. **Green sites:** if green-looking ground shows a `GROUND` name that scores 0 in the HUD, add it to `ZPI_cfg_surfaceGreen` in `config.sqf`.
 4. **Short generator test** before a long run: set `ZPI_cfg_tourTarget = 50`, build the dataset with `--latest` and look at `output\dataset\previews`.
 5. **Z:** check that the tiles have north up and line up in `ortho_<tag>.png`; if tiles look blurry, raise `ZPI_cfg_orthoSettle`.

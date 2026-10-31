@@ -109,7 +109,7 @@ ZPI_fnc_scene_dugIn = {
 ZPI_fnc_convoyOf = {
     params ["_c", "_kinds", ["_spacing", 30]];
     private _road = [_c, 500] call ZPI_fnc_findRoad;
-    if (isNull _road) exitWith { ["No road near this location; a column needs one (L or Alt+click on map)"] call ZPI_fnc_msg };
+    if (isNull _road) exitWith { ["No road near this location; a column needs one (L or C)"] call ZPI_fnc_msg };
     private _back = [_road, count _kinds, _spacing, true] call ZPI_fnc_roadPath;
     private _fwd  = [_road, 40, 40, false] call ZPI_fnc_roadPath;
     // turn back before the road reaches a village (pictures with few buildings only)
@@ -603,7 +603,7 @@ ZPI_fnc_entryScene = {
 ZPI_fnc_scene_building = {
     params ["_c"];
     private _b = [_c, 4, false, 600] call ZPI_fnc_findEntryBuildings;
-    if (_b isEqualTo []) exitWith { ["No enterable building with few others around within 600 m: move the scene (C or Alt+click on the map)"] call ZPI_fnc_msg };
+    if (_b isEqualTo []) exitWith { ["No enterable building with few others around within 600 m: move the scene (L or C)"] call ZPI_fnc_msg };
     [[[_b select 0, ZPI_cfg_buildingEnter]], ZPI_cfg_buildingSquad,
         createHashMapFromArray [["approach", [30, 45] call ZPI_fnc_randRange], ["formation", "tight"], ["speed", "NORMAL"]]] call ZPI_fnc_entryScene;
 };
@@ -612,7 +612,7 @@ ZPI_fnc_scene_building = {
 ZPI_fnc_scene_fireteam = {
     params ["_c"];
     private _b = [_c, 3, false, 600] call ZPI_fnc_findEntryBuildings;
-    if (_b isEqualTo []) exitWith { ["No enterable building with few others around within 600 m: move the scene (C or Alt+click on the map)"] call ZPI_fnc_msg };
+    if (_b isEqualTo []) exitWith { ["No enterable building with few others around within 600 m: move the scene (L or C)"] call ZPI_fnc_msg };
     [[[_b select 0, 3]], 6,
         createHashMapFromArray [["approach", [20, 30] call ZPI_fnc_randRange], ["formation", "tight"], ["speed", "NORMAL"]]] call ZPI_fnc_entryScene;
 };
@@ -621,7 +621,7 @@ ZPI_fnc_scene_fireteam = {
 ZPI_fnc_scene_dismount = {
     params ["_c"];
     private _b = [_c, 3, false, 600] call ZPI_fnc_findEntryBuildings;
-    if (_b isEqualTo []) exitWith { ["No enterable building with few others around within 600 m: move the scene (C or Alt+click on the map)"] call ZPI_fnc_msg };
+    if (_b isEqualTo []) exitWith { ["No enterable building with few others around within 600 m: move the scene (L or C)"] call ZPI_fnc_msg };
     [[[_b select 0, 4]], 8,
         createHashMapFromArray [["approach", [12, 16] call ZPI_fnc_randRange], ["formation", "tight"], ["speed", "NORMAL"],
             ["vehicle", [["wheeled", "wheeled", "tracked"]] call ZPI_fnc_pick]]] call ZPI_fnc_entryScene;
@@ -640,7 +640,7 @@ ZPI_fnc_scene_pair = {
 ZPI_fnc_scene_file = {
     params ["_c"];
     private _b = [_c, 4, false, 600] call ZPI_fnc_findEntryBuildings;
-    if (_b isEqualTo []) exitWith { ["No enterable building with few others around within 600 m: move the scene (C or Alt+click on the map)"] call ZPI_fnc_msg };
+    if (_b isEqualTo []) exitWith { ["No enterable building with few others around within 600 m: move the scene (L or C)"] call ZPI_fnc_msg };
     [[[_b select 0, 4]], 8,
         createHashMapFromArray [["approach", [55, 70] call ZPI_fnc_randRange], ["formation", "file"], ["speed", "LIMITED"]]] call ZPI_fnc_entryScene;
 };
@@ -748,7 +748,7 @@ ZPI_fnc_scene_patrolRoad = {
 ZPI_fnc_scene_lone = {
     params ["_c"];
     private _b = [_c, 3, false, 400, 1, ZPI_cfg_loneRadius] call ZPI_fnc_findEntryBuildings;
-    if (_b isEqualTo []) exitWith { ["No lone enterable building (nothing else within " + str ZPI_cfg_loneRadius + " m) near here: move the scene (C or Alt+click on the map)"] call ZPI_fnc_msg };
+    if (_b isEqualTo []) exitWith { ["No lone enterable building (nothing else within " + str ZPI_cfg_loneRadius + " m) near here: move the scene (L or C)"] call ZPI_fnc_msg };
     private _file = ([1] call ZPI_fnc_rand) < 0.35;
     [[[_b select 0, ZPI_cfg_buildingEnter]], ZPI_cfg_buildingSquad,
         createHashMapFromArray [["approach", ([[25, 50], [50, 65]] select _file) call ZPI_fnc_randRange],

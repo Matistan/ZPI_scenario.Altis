@@ -32,9 +32,8 @@ ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br
     + "Shift+\ wheeled convoy &#160; Shift+; motor pool<br/>"
     + "Shift+' clutter, no targets (background pictures)<br/>"
     + "N new layout &#160; X clear &#160; L next location<br/>"
-    + "C scene to where you look &#160; J camera to scene<br/>"
-    + "Alt+click on map: move scene there<br/><br/>"
-    + "T time &#160; Y weather &#160<br/>"
+    + "C scene to where you look &#160; J camera to scene<br/><br/>"
+    + "T time &#160; Y weather &#160;<br/>"
     + "U quiet (no text) &#160; H help"
     + "</t>";
 
@@ -144,9 +143,5 @@ ZPI_fnc_initKeys = {
     _d displayAddEventHandler ["MouseZChanged", {
         params ["_disp", "_z"];
         if (!visibleMap && {!dialog} && {!ZPI_tourRunning}) then { [_z] call ZPI_fnc_wheelZoom };
-    }];
-    addMissionEventHandler ["MapSingleClick", {
-        params ["_units", "_pos", "_alt", "_shift"];
-        if (_alt) then { [_pos, -1] call ZPI_fnc_setCenter };
     }];
 };
