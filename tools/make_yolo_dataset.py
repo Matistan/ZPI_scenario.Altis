@@ -646,6 +646,8 @@ def build_meta(rec: dict, name: str, split: str, W: int, H: int, classes: list[s
         "ground_surface": rec.get("surface") or None,
         "green_fraction": rec.get("_green"),
         "buildings_in_picture": sum(1 for o in rec["objects"] if o["kind"] == "b"),
+        # generator stage the picture was taken in (ZPI_cfg_tourPlan: far, tank_fire, prone, ...; "" = normal run)
+        "tour_stage": rec.get("stage") or None,
         "terrain_grid": rec.get("terrain_grid"),
         # [u, v, x, y, z, kind, object_id]: what the image point (u, v normalized) really hits;
         # kind g ground, b building, t tree/bush, e scene object, o other
@@ -826,11 +828,11 @@ def write_manifest(out: Path, classes: list[str]):
             rows.append([img.stem, s, m.get("scene"), m.get("seed"), m.get("region"), m.get("camera", {}).get("hfov_deg"),
                          m.get("gsd_center_m_per_px"), env.get("time_label"), env.get("weather"), m.get("scale_lock"),
                          sum(c.values())] + [c.get(n, 0) for n in classes]
-                        + [b.get("id", ""), b.get("index", ""), m.get("green_fraction"), m.get("ground_surface")])
+                        + [b.get("id", ""), b.get("index", ""), m.get("green_fraction"), m.get("ground_surface"), m.get("tour_stage") or ""])
     with open(out / "manifest.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["name", "split", "scene", "seed", "region", "hfov_deg", "gsd_m_per_px", "time", "weather",
-                    "scale_lock", "n_boxes"] + classes + ["burst", "burst_shot", "green_fraction", "ground_surface"])
+                    "scale_lock", "n_boxes"] + classes + ["burst", "burst_shot", "green_fraction", "ground_surface", "tour_stage"])
         w.writerows(rows)
     return rows
 
@@ -1027,6 +1029,16 @@ def main():
             tot[n] += r[11 + i]
     print(f"\ndataset now: {len(rows)} images (train {tot['train']}, val {tot['val']}, test {tot['test']})")
     print("boxes: " + ", ".join(f"{n} {tot[n]}" for n in classes))
+    # pictures that contain each class (what the per-class targets of the generator plan count)
+    pics = Counter()
+    for r in rows:
+        for i, n in enumerate(classes):
+            pics[n] += r[11 + i] > 0
+    print("pictures with: " + ", ".join(f"{n} {pics[n]}" for n in classes)
+          + f", none (background) {sum(1 for r in rows if r[10] == 0)}")
+    stages = Counter(r[-1] for r in rows if r[-1])
+    if stages:
+        print("pictures per generator stage: " + ", ".join(f"{k} {v}" for k, v in stages.items()))
 
     report_box_fit(out)
     if args.roboflow:

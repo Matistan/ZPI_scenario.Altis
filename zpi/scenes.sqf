@@ -775,6 +775,30 @@ ZPI_fnc_downGroup = {               // [posATL, heading, layout] -> soldiers
             private _n = 6 + ([3] call ZPI_fnc_randInt);
             for "_j" from 0 to (_n - 1) do { [(_j - (_n - 1) / 2) * 2.2, 0, _h, "DOWN"] call _spawn };
         };
+        case "prone_wedge": {           // wedge gone to ground, everybody prone
+            private _n = 6 + ([3] call ZPI_fnc_randInt);
+            [0, 0, _h, "DOWN"] call _spawn;
+            for "_j" from 1 to (_n - 1) do {
+                private _row = ceil (_j / 2);
+                [([-1, 1] select (_j mod 2)) * _row * 2.6, -_row * 2.6, _h, "DOWN"] call _spawn;
+            };
+        };
+        case "prone_scatter": {         // taking cover where they stood: prone, scattered, facing all ways
+            private _n = 5 + ([4] call ZPI_fnc_randInt);
+            for "_j" from 1 to _n do {
+                private _a = [360] call ZPI_fnc_rand;
+                private _d = [1, 9] call ZPI_fnc_randRange;
+                [_d * (sin _a), _d * (cos _a), _h + ([-90, 90] call ZPI_fnc_randRange), "DOWN"] call _spawn;
+            };
+        };
+        case "prone_pairs": {           // 2-man teams (sniper / observer, MG pairs) a few metres apart
+            private _n = 2 + ([2] call ZPI_fnc_randInt);
+            for "_j" from 0 to (_n - 1) do {
+                private _x0 = (_j - (_n - 1) / 2) * ([6, 12] call ZPI_fnc_randRange);
+                [_x0, 0, _h, "DOWN"] call _spawn;
+                [_x0 + 1.3, -0.4, _h + ([-15, 15] call ZPI_fnc_randRange), "DOWN"] call _spawn;
+            };
+        };
         case "kneel_line": {            // kneeling line, a few prone
             private _n = 5 + ([3] call ZPI_fnc_randInt);
             for "_j" from 0 to (_n - 1) do { [(_j - (_n - 1) / 2) * 2.5, 0, _h, [["MIDDLE", "MIDDLE", "MIDDLE", "DOWN"]] call ZPI_fnc_pick] call _spawn };
@@ -812,9 +836,9 @@ ZPI_fnc_scene_groupsDown = {
     params ["_c"];
     private _p = [_c, 350] call ZPI_fnc_findOpen;
     private _h = [360] call ZPI_fnc_rand;
-    private _kinds = ["prone_line", "kneel_line", "circle", "wedge", "cluster"];
+    private _kinds = ZPI_cfg_downKinds;                 // the "prone" generator stage uses prone layouts only
     private _k1 = [_kinds] call ZPI_fnc_pick;
-    private _k2 = [_kinds - [_k1]] call ZPI_fnc_pick;
+    private _k2 = [[_kinds - [_k1], _kinds] select (count _kinds < 2)] call ZPI_fnc_pick;
     private _a = [_p, _h, _k1] call ZPI_fnc_downGroup;
     private _p2 = [_p, _h, ([-1, 1] select (([1] call ZPI_fnc_rand) < 0.5)) * ([35, 55] call ZPI_fnc_randRange), [-15, 15] call ZPI_fnc_randRange] call ZPI_fnc_rel;
     private _b = [_p2, _h + ([-40, 40] call ZPI_fnc_randRange), _k2] call ZPI_fnc_downGroup;
@@ -893,7 +917,147 @@ ZPI_fnc_scene_tankEscort = {
     };
 };
 
-// index = number key (10 = minus, 11 = [, 12 = ], 13-22 = Shift+1 ... Shift+0, 23 = Shift+minus)
+// ---------------------------------------------------------------------
+// Shift+] - infantry spread out: a platoon of 3-4 groups over ~80 m in every pose:
+//           standing (talking, sentries), a fireteam walking, a kneeling line, a prone line.
+//           Made for pictures from far away (soldiers 20-60 px), many soldiers per picture.
+// ---------------------------------------------------------------------
+ZPI_fnc_scene_infantrySpread = {
+    params ["_c"];
+    private _p = [_c, 350] call ZPI_fnc_findOpen;
+    private _h = [360] call ZPI_fnc_rand;
+    // standing group, talking, facing each other
+    private _gs = [ZPI_side] call ZPI_fnc_newGroup;
+    private _sc = [_p, _h, [-30, -15] call ZPI_fnc_randRange, [-10, 10] call ZPI_fnc_randRange] call ZPI_fnc_rel;
+    private _ns = 3 + ([3] call ZPI_fnc_randInt);
+    for "_j" from 0 to (_ns - 1) do {
+        private _a = _j * 360 / _ns;
+        [_gs, _sc getPos [1.5, _a], _a + 180, "UP"] call ZPI_fnc_spawnSoldier;
+    };
+    // kneeling and prone groups
+    private _k = [["kneel_line", "circle", "cluster"]] call ZPI_fnc_pick;
+    [[_p, _h, [10, 30] call ZPI_fnc_randRange, [10, 25] call ZPI_fnc_randRange] call ZPI_fnc_rel, _h + ([-30, 30] call ZPI_fnc_randRange), _k] call ZPI_fnc_downGroup;
+    private _kp = [["prone_line", "prone_wedge", "prone_scatter", "prone_pairs"]] call ZPI_fnc_pick;
+    [[_p, _h, [0, 25] call ZPI_fnc_randRange, -([15, 30] call ZPI_fnc_randRange)] call ZPI_fnc_rel, _h + ([-30, 30] call ZPI_fnc_randRange), _kp] call ZPI_fnc_downGroup;
+    // sentries
+    private _gx = [ZPI_side] call ZPI_fnc_newGroup;
+    for "_j" from 1 to (1 + ([3] call ZPI_fnc_randInt)) do {
+        [_gx, [_p, _h, [-40, 40] call ZPI_fnc_randRange, [-35, 35] call ZPI_fnc_randRange] call ZPI_fnc_rel, [360] call ZPI_fnc_rand,
+            [["UP", "UP", "MIDDLE"]] call ZPI_fnc_pick] call ZPI_fnc_spawnSoldier;
+    };
+    // a fireteam walking a loop through the position
+    private _gw = [ZPI_side] call ZPI_fnc_newGroup;
+    private _wp = [_p, _h, -([20, 35] call ZPI_fnc_randRange), -30] call ZPI_fnc_rel;
+    for "_j" from 0 to 3 do { [_gw, [_wp, _h, (_j - 1.5) * 2, -2 * _j] call ZPI_fnc_rel, _h, "UP", false] call ZPI_fnc_spawnSoldier };
+    _gw setFormation ([["STAG COLUMN", "WEDGE", "FILE"]] call ZPI_fnc_pick);
+    _gw setBehaviour "AWARE";
+    _gw setSpeedMode "LIMITED";
+    _gw setCombatMode "BLUE";
+    [_gw, [[_p, _h, 35, -30] call ZPI_fnc_rel, [_p, _h, 35, 35] call ZPI_fnc_rel, [_p, _h, -35, 35] call ZPI_fnc_rel, _wp], true] call ZPI_fnc_addWaypoints;
+    ["infantry_spread", format ['{"down":["%1","%2"],"heading":%3}', _k, _kp, _h toFixed 0]] call ZPI_fnc_event;
+};
+
+// ---------------------------------------------------------------------
+// Shift+\ - wheeled convoy: 5 MRAPs / trucks / wheeled APCs on a country road
+// ---------------------------------------------------------------------
+ZPI_fnc_scene_wheeledConvoy = { params ["_c"]; [_c, ["W", "W", "W", "W", "W"], 30] call ZPI_fnc_convoyOf };
+
+// ---------------------------------------------------------------------
+// Shift+; - motor pool: 4-6 wheeled vehicles parked in the open (rows, herringbone or
+//           spread under a tree line), a few crew members standing around
+// ---------------------------------------------------------------------
+ZPI_fnc_scene_motorPool = {
+    params ["_c"];
+    private _p = [_c, 350] call ZPI_fnc_findOpen;
+    private _h = [360] call ZPI_fnc_rand;
+    private _n = 4 + ([3] call ZPI_fnc_randInt);
+    private _style = [["rows", "herringbone", "spread"]] call ZPI_fnc_pick;
+    private _list = [];
+    for "_j" from 0 to (_n - 1) do {
+        switch (_style) do {
+            case "rows":        { _list pushBack ["W", ((_j mod 3) - 1) * 6, -12 * floor (_j / 3), 0] };
+            case "herringbone": { _list pushBack ["W", [-4, 4] select (_j mod 2), -9 * _j, [-35, 35] select (_j mod 2)] };
+            default             { _list pushBack ["W", [-30, 30] call ZPI_fnc_randRange, [-25, 25] call ZPI_fnc_randRange, [-180, 180] call ZPI_fnc_randRange] };
+        };
+    };
+    for "_j" from 1 to (2 + ([4] call ZPI_fnc_randInt)) do {
+        _list pushBack ["S", [-15, 15] call ZPI_fnc_randRange, [-20, 8] call ZPI_fnc_randRange, [-180, 180] call ZPI_fnc_randRange, [["UP", "UP", "MIDDLE"]] call ZPI_fnc_pick];
+    };
+    private _g = [ZPI_side] call ZPI_fnc_newGroup;
+    [_p, _h, _list, _g, 1] call ZPI_fnc_layout;
+    ["motor_pool", format ['{"vehicles":%1,"style":"%2"}', _n, _style]] call ZPI_fnc_event;
+};
+
+// ---------------------------------------------------------------------
+// Shift+' - clutter, NO targets (background pictures): logs, rocks, rubble, wrecks, civilian
+//           cars, sometimes a smoking wreck, often among bushes. Things a detector could take
+//           for a soldier, a vehicle or an explosion; nothing in these pictures gets a label.
+// ---------------------------------------------------------------------
+ZPI_clutterPoints = [];
+ZPI_fnc_scene_clutter = {
+    params ["_c"];
+    // half of the visits among bushes / small trees, half on open ground
+    private _p = [];
+    if (([1] call ZPI_fnc_rand) < 0.5) then {
+        private _cands = selectBestPlaces [[_c select 0, _c select 1], 400, "meadow + trees - forest - (3 * houses) - (10 * sea)", 25, 12];
+        {
+            private _q = [(_x select 0) select 0, (_x select 0) select 1, 0];
+            private _nb = count (nearestTerrainObjects [_q, ["BUSH", "TREE", "SMALL TREE"], 35, false, true]);
+            if (!surfaceIsWater _q && {_nb >= 5} && {_nb <= 30} && {(count ([_q, 150] call ZPI_fnc_buildingsNear)) == 0}) exitWith { _p = _q };
+        } forEach _cands;
+    };
+    if (_p isEqualTo []) then { _p = [_c, 350] call ZPI_fnc_findOpen };
+    ZPI_clutterPoints = [];
+    private _kinds = ZPI_clutterProps apply { [_x select 0, [_x select 1] call ZPI_fnc_validClasses] };
+    _kinds = _kinds select { (_x select 1) isNotEqualTo [] };
+    private _n = 8 + ([9] call ZPI_fnc_randInt);
+    for "_j" from 1 to _n do {
+        if (_kinds isEqualTo []) exitWith {};
+        (([_kinds] call ZPI_fnc_pick)) params ["_kind", "_classes"];
+        private _pos = _p getPos [[2, 40] call ZPI_fnc_randRange, [360] call ZPI_fnc_rand];
+        _pos = [_pos select 0, _pos select 1, 0];
+        if (!surfaceIsWater _pos) then {
+            private _cl = [_classes] call ZPI_fnc_pick;
+            private _o = if (_kind == "car") then {
+                [_cl, _pos, [360] call ZPI_fnc_rand, false, "neg_vehicle"] call ZPI_fnc_spawnVehicle
+            } else {
+                private _s = [_cl, _pos, [360] call ZPI_fnc_rand] call ZPI_fnc_spawnStatic;
+                if (!isNull _s) then { [_s, "neg_" + _kind] call ZPI_fnc_register };
+                _s
+            };
+            if (!isNull _o) then {
+                ZPI_clutterPoints pushBack ((getPosASL _o) vectorAdd [0, 0, 0.5]);
+                // sometimes a wreck smokes: looks a bit like an explosion's smoke column
+                if (_kind == "wreck" && {([1] call ZPI_fnc_rand) < 0.25}) then {
+                    private _fx = [["test_EmptyObjectForSmoke", "test_EmptyObjectForFireBig"]] call ZPI_fnc_validClasses;
+                    if (_fx isNotEqualTo []) then {
+                        private _sm = createVehicle [[_fx] call ZPI_fnc_pick, getPosATL _o, [], 0, "CAN_COLLIDE"];
+                        ZPI_sceneStatics pushBack _sm;
+                    };
+                };
+            };
+        };
+    };
+    // a few civilians walking past (sometimes)
+    if (([1] call ZPI_fnc_rand) < 0.35) then {
+        private _gc = [civilian] call ZPI_fnc_newGroup;
+        _gc setBehaviour "CARELESS";
+        _gc setSpeedMode "LIMITED";
+        for "_j" from 0 to ([3] call ZPI_fnc_randInt) do {
+            [_gc, _p getPos [[10, 30] call ZPI_fnc_randRange, [360] call ZPI_fnc_rand], 0, "AUTO", false,
+                [ZPI_negatives get "people"] call ZPI_fnc_pick, "neg_person"] call ZPI_fnc_spawnSoldier;
+        };
+        [_gc, [_p getPos [40, 0], _p getPos [40, 120], _p getPos [40, 240]], true] call ZPI_fnc_addWaypoints;
+    };
+    // bushes and small trees around are targets for the camera too
+    {
+        ZPI_clutterPoints pushBack ((getPosASL _x) vectorAdd [0, 0, 0.5]);
+    } forEach ((nearestTerrainObjects [_p, ["BUSH", "SMALL TREE"], 40, false, true]) select [0, 10]);
+    ["clutter", format ['{"objects":%1,"points":%2,"pos":%3}', count ZPI_entities, count ZPI_clutterPoints, [_p, 1] call ZPI_fnc_v3]] call ZPI_fnc_event;
+};
+
+// index = number key (10 = minus, 11 = [, 12 = ], 13-22 = Shift+1 ... Shift+0, 23 = Shift+minus,
+// 24 = Shift+[, 25 = Shift+], 26 = Shift+backslash, 27 = Shift+;, 28 = Shift+')
 ZPI_scenes = [
     ["mixed",             ZPI_fnc_scene_mixed],
     ["checkpoint",        ZPI_fnc_scene_checkpoint],
@@ -919,7 +1083,11 @@ ZPI_scenes = [
     ["patrol_road",       ZPI_fnc_scene_patrolRoad],
     ["building_lone",     ZPI_fnc_scene_lone],
     ["groups_down",       ZPI_fnc_scene_groupsDown],
-    ["tank_escort",       ZPI_fnc_scene_tankEscort]
+    ["tank_escort",       ZPI_fnc_scene_tankEscort],
+    ["infantry_spread",   ZPI_fnc_scene_infantrySpread],
+    ["wheeled_convoy",    ZPI_fnc_scene_wheeledConvoy],
+    ["motor_pool",        ZPI_fnc_scene_motorPool],
+    ["clutter",           ZPI_fnc_scene_clutter]
 ];
 
 ZPI_fnc_runScene = {

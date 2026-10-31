@@ -113,7 +113,7 @@ The readout and the crosshair are UI, so they never appear in **P** screenshots:
 |---|---|
 | 1–9, 0 | scenes (below) |
 | **- (minus)** | building scene |
-| **Shift+1 … Shift+0**, **Shift+-** | more building scenes, tank columns, tanks firing, patrols, groups kneeling / prone (below) |
+| **Shift+1 … Shift+0**, **Shift+-**, **Shift+[ ] \\ ; '** | more building scenes, tank columns, tanks firing, patrols, groups kneeling / prone, tank escort, infantry spread out, wheeled convoy, motor pool, clutter (below) |
 | N | new layout (seed + 1) |
 | X | clear |
 | L / Alt+click on map / C | next marker location / clicked point / point in the middle of the screen |
@@ -149,6 +149,11 @@ The readout and the crosshair are UI, so they never appear in **P** screenshots:
 | **Shift+9** | **patrol_road** | a squad of 8 walking along a country road in a file or staggered column (turns back before a village) |
 | **Shift+0** | **building_lone** | squad of 8 enters a **lone** building (no other building within 120 m, `ZPI_cfg_loneRadius`): 4 go in, 4 wait; generator pictures show only that one building |
 | **Shift+-** | **groups_down** | two groups 35–55 m apart, kneeling or lying: prone firing line, kneeling line, all-round defence circle, wedge gone to ground, or a tight cluster; nobody walks |
+| **Shift+[** | **tank_escort** | 6 soldiers run beside a tank, then split into two groups of 3 walking on either side of it |
+| **Shift+]** | **infantry_spread** | a platoon spread over ~80 m in every pose: a standing group, sentries, a walking fireteam, a kneeling group and a prone group; made for pictures from far away |
+| **Shift+\\** | **wheeled_convoy** | 5 MRAPs / trucks / wheeled APCs on a country road (`military_vehicle`) |
+| **Shift+;** | **motor_pool** | 4–6 wheeled vehicles parked in rows, herringbone or spread out, a few crew members standing around |
+| **Shift+'** | **clutter** | **no targets** (background pictures): logs, rocks, rubble, wrecks, civilian cars, often among bushes, sometimes a smoking wreck or civilians walking past; nothing gets a label (`ZPI_clutterProps` in `config.sqf`) |
 
 **Where scenes go.** Scenes look for green ground with few buildings: open-ground scenes take the greenest flat spot with no buildings around, road scenes a road piece out in the country (at most 1 building within 150 m; columns turn back before a village), building scenes a building with at most 3 buildings within 70 m (a farm, not a village). The ground type comes from the game (`surfaceType`); how green each type counts is set in `ZPI_cfg_surfaceGreen` in `config.sqf`.
 
@@ -157,6 +162,21 @@ The readout and the crosshair are UI, so they never appear in **P** screenshots:
 ## Dataset generator (Home)
 
 Press **Home** and leave the game running: the mission makes **1000 labelled screenshots on its own** (`ZPI_cfg_tourTarget`), always in clear weather at noon. For every location marker it goes through a shuffled list of scenes (`ZPI_cfg_tourScenes`: all 23 except "mixed"; tank columns, patrols, lone-building entries and kneeling / prone groups are listed twice, so they come twice per round), with a new layout every time. The first scene of a run is always the tank-firing scene, so even a short test has firing pictures.
+
+**Plan: stages with their own targets (`ZPI_cfg_tourPlan`).** One Home press can run several stages one after another. Each stage is `[profile, pictures]`; the profile (`ZPI_tourProfiles` in `config.sqf`) changes some `ZPI_cfg_*` settings for that stage only (which scenes, how many pictures per scene, zoom, camera distance and angle, explosions, ...). The current plan, about 1850 pictures (~4 hours, ~25 GB of screenshots):
+
+| Stage | Pictures | What it makes |
+|---|---|---|
+| `far` | 700 | soldiers **from far away, ~20–60 px** (zoom 0.025–0.06 m/px, `ZPI_cfg_tourFarGSD`), camera 300–700 m away, 40–70° above the horizon (so 200–650 m high); patrols, groups kneeling / prone, infantry spread out, checkpoint, dug-in, size ladder, lone building |
+| `tank_fire` | 200 | the tank-firing scene only (`tank_fire`), zoom 0.009–0.016 m/px |
+| `prone` | 200 | groups down with **prone layouts only** (line, wedge, scattered, 2-man pairs), dug-in, infantry spread out (`soldier_prone`) |
+| `vehicles` | 200 | wheeled convoy, motor pool, checkpoint, convoy (`military_vehicle`) |
+| `explosions` | 200 | a few pictures of a scene, then 6 shells with **2 pictures each** (0.35 s and ~1.3 s after the explosion, same reference picture, so both boxes are measured), zoom 0.025–0.05 m/px |
+| `negatives` | 350 | the clutter scene (and civilian cars / wrecks): **no labels at all**, no building in the picture (`ZPI_cfg_maxBuildings` 0 in this stage), half at the soldier zoom, half at the far zoom |
+
+The numbers are pictures, not boxes. Each picture's JSON says `"tour_stage"`, `manifest.csv` has a `tour_stage` column, and `make_yolo_dataset.py` prints how many pictures contain each class and how many came from each stage. To continue a plan after a stop, remove the finished stages from `ZPI_cfg_tourPlan` (or lower their numbers); `ZPI_cfg_tourPlan = [];` runs the normal generator (`ZPI_cfg_tourScenes`, `ZPI_cfg_tourTarget`). Raise `maxScreenShotFolderSizeMB` in your `.Arma3Profile` (with the game closed) so the new screenshots fit next to the old ones.
+
+**Soldier size.** Measured on the October pictures: a soldier's longest box side is about K / zoom pixels, K ≈ 0.95 m kneeling, 1.2–1.7 m standing, 1.6–2.1 m prone. The normal soldier zoom (0.009–0.0115 m/px) therefore gives about 90–170 px, the far zoom (0.025–0.06 m/px) about 20–60 px. Build with `--classes size` if the detector should tell small from large soldiers.
 
 **No repeats between runs.** Every mission start writes its screenshots into a new folder (`Screenshots\zpi\<start time>\`), and the layout seed of every scene continues from where the last generator run on this PC stopped (stored in the Arma profile, starting at 1000; runs before this version used seeds below 1000). Sites and camera positions are random anyway, so no two runs repeat a picture.
 

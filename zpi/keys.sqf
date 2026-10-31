@@ -16,7 +16,7 @@ ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br
     + "B barrage where you look<br/>"
     + "I auto-shot on explosions on/off<br/>"
     + "Z orthophoto of the scene area<br/>"
-    + "Home dataset generator: makes ZPI_cfg_tourTarget images by itself (Home stops)<br/><br/>"
+    + "Home dataset generator: runs ZPI_cfg_tourPlan (Home stops)<br/><br/>"
     + "<t color='#ffd27a'>SCENES</t>  1-9, 0<br/>"
     + "1 checkpoint &#160; 2 column &#160; 3 dug-in<br/>"
     + "4 convoy &#160; 5 patrols &#160; 6 tank platoon<br/>"
@@ -28,7 +28,9 @@ ZPI_helpText = "<t size='1.1' font='RobotoCondensedBold'>ZPI drone scenes</t><br
     + "Shift+7 long armour column &#160; Shift+8 patrol across fields<br/>"
     + "Shift+9 patrol on a road &#160; Shift+0 lone building entry<br/>"
     + "Shift+- groups kneeling / prone<br/>"
-    + "Shift+[ tank escort<br/>"
+    + "Shift+[ tank escort &#160; Shift+] infantry spread out<br/>"
+    + "Shift+\ wheeled convoy &#160; Shift+; motor pool<br/>"
+    + "Shift+' clutter, no targets (background pictures)<br/>"
     + "N new layout &#160; X clear &#160; L next location<br/>"
     + "C scene to where you look &#160; J camera to scene<br/>"
     + "Alt+click on map: move scene there<br/><br/>"
@@ -62,6 +64,8 @@ ZPI_fnc_onKey = {
     if (_shift && {_key in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]}) exitWith { [_key + 11] call ZPI_fnc_runScene; true };
     if (_shift && {_key == 12}) exitWith { [23] call ZPI_fnc_runScene; true };
     if (_shift && {_key == 26}) exitWith { [24] call ZPI_fnc_runScene; true };
+    // Shift+] infantry spread out, Shift+backslash wheeled convoy, Shift+; motor pool, Shift+' clutter (no targets)
+    if (_shift && {_key in [27, 43, 39, 40]}) exitWith { [[25, 26, 27, 28] select ([27, 43, 39, 40] find _key)] call ZPI_fnc_runScene; true };
     private _handled = true;
     switch (_key) do {
         case 2:  { [1] call ZPI_fnc_runScene };

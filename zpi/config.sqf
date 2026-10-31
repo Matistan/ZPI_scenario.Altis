@@ -100,7 +100,7 @@ ZPI_cfg_tourExplosions = 1;      // explosion close-ups per scene visit
 // ONE scale for every generator picture that can contain soldiers (close-ups, groups, building
 // scenes, static vehicle scenes, tank firing, explosion close-ups): a soldier always has about
 // the same pixel size, so the detector does not have to learn many sizes of the same class.
-ZPI_cfg_tourSoldierGSD = [0.009, 0.0115]; // m/px (picture 17-22 m wide; soldier seen from 35-60 deg ~55-90 px)
+ZPI_cfg_tourSoldierGSD = [0.009, 0.0115]; // m/px (picture 17-22 m wide; soldier ~90-170 px, measured on the October pictures)
 ZPI_cfg_tourExplosionGSD = [0.03, 0.045];  // explosion pictures: zoomed out (58-86 m wide), the smoke column is a
                                            // part of the picture, not all of it, so the measured box fits the smoke
 ZPI_cfg_tourGroupRadius = 8;             // m: soldiers within this distance are aimed at together
@@ -116,6 +116,78 @@ ZPI_cfg_tourElev       = [40, 75];
 ZPI_cfg_tourElevSoldier = [35, 60];      // soldier shots: lower, so more of the soldier's height shows (straight down = only head and shoulders)
 ZPI_cfg_tourElevPatrol = [30, 45];       // walking patrols and kneeling / prone groups: flatter, more from the side
 ZPI_cfg_tourElevColumn = [30, 60];       // driving columns: from the side as well as from above
+
+// soldiers from far away (the "far" stage below): ~20-60 px. Measured on the October pictures: a soldier's
+// longest box side is about K / GSD px with K ~0.95 m kneeling, 1.2-1.7 m standing, 1.6-2.1 m prone.
+ZPI_cfg_tourFarGSD     = [0.025, 0.06];   // picture 48-115 m wide
+ZPI_cfg_tourFiringExtra = 1;             // pictures after each tank shot (smoke); the shot itself is always taken
+ZPI_cfg_tourExplosionFrames = 1;         // pictures per explosion: 1 = at 0.35 s; 2 = also at ~1.3 s (same reference)
+ZPI_cfg_downKinds      = ["prone_line", "kneel_line", "circle", "wedge", "cluster"];   // groups-down layouts (Shift+-)
+
+// ---- generator plan: stages run one after another with one Home press -------------------------
+// Each stage = [profile, pictures]. A profile changes some ZPI_cfg_* settings for that stage only
+// (scenes, zoom, camera distance, ...); everything not listed keeps its normal value.
+// Empty plan ([]) = the normal generator: ZPI_cfg_tourScenes, ZPI_cfg_tourTarget pictures.
+// To continue a plan after a stop, remove the finished stages / lower the numbers.
+ZPI_cfg_tourPlan = [
+    ["far",        700],   // soldiers from far away (20-60 px), every pose, higher camera
+    ["tank_fire",  200],   // tanks firing (tank_fire)
+    ["prone",      200],   // soldiers lying (soldier_prone)
+    ["vehicles",   200],   // wheeled vehicles (military_vehicle)
+    ["explosions", 200],   // explosions
+    ["negatives",  350]    // no targets at all: logs, rocks, rubble, wrecks, civilian cars, bushes
+];
+ZPI_tourProfiles = createHashMapFromArray [
+    ["far", createHashMapFromArray [
+        // scenes with soldiers: patrols, groups down, infantry spread out, checkpoint, dug-in, ...
+        ["ZPI_cfg_tourScenes", [25, 25, 25, 20, 21, 23, 23, 5, 12, 3, 1, 8, 6, 22]],
+        ["ZPI_cfg_tourShots", createHashMapFromArray [[25, 20], [20, 15], [21, 15], [23, 15], [5, 15], [12, 15], [3, 12],
+                                                      [1, 12], [8, 10], [6, 10], [22, 15]]],
+        ["ZPI_cfg_tourSoldierGSD", ZPI_cfg_tourFarGSD],
+        ["ZPI_cfg_tourVehicleGSD", ZPI_cfg_tourFarGSD],
+        ["ZPI_cfg_tourDist", [300, 700]],            // higher camera: 200-650 m above the ground
+        ["ZPI_cfg_tourElevSoldier", [40, 70]],
+        ["ZPI_cfg_tourElevPatrol", [35, 60]],
+        ["ZPI_cfg_tourGroupRadius", 25],             // a wider picture holds more soldiers
+        ["ZPI_cfg_tourExplosions", 0],
+        ["ZPI_cfg_tourFiringPerScene", 0]
+    ]],
+    ["tank_fire", createHashMapFromArray [
+        ["ZPI_cfg_tourScenes", [18]],
+        ["ZPI_cfg_tourShots", createHashMapFromArray [[18, 24]]],
+        ["ZPI_cfg_tourFireGSD", [0.009, 0.016]],
+        ["ZPI_cfg_tourExplosions", 0]
+    ]],
+    ["prone", createHashMapFromArray [
+        ["ZPI_cfg_tourScenes", [23, 23, 3, 25]],
+        ["ZPI_cfg_tourShots", createHashMapFromArray [[23, 18], [3, 12], [25, 12]]],
+        ["ZPI_cfg_downKinds", ["prone_line", "prone_wedge", "prone_scatter", "prone_pairs"]],
+        ["ZPI_cfg_tourExplosions", 0],
+        ["ZPI_cfg_tourFiringPerScene", 0]
+    ]],
+    ["vehicles", createHashMapFromArray [
+        ["ZPI_cfg_tourScenes", [26, 27, 26, 27, 1, 4]],
+        ["ZPI_cfg_tourShots", createHashMapFromArray [[26, 20], [27, 15], [1, 10], [4, 15]]],
+        ["ZPI_cfg_tourExplosions", 0],
+        ["ZPI_cfg_tourFiringPerScene", 0]
+    ]],
+    ["explosions", createHashMapFromArray [
+        // a few normal pictures per scene, then shells: 2 pictures per explosion
+        ["ZPI_cfg_tourScenes", [6, 2, 23, 20, 25, 27, 3]],
+        ["ZPI_cfg_tourShots", createHashMapFromArray [[6, 3], [2, 3], [23, 3], [20, 3], [25, 3], [27, 3], [3, 3]]],
+        ["ZPI_cfg_tourExplosions", 6],
+        ["ZPI_cfg_tourExplosionFrames", 2],
+        ["ZPI_cfg_tourExplosionGSD", [0.025, 0.05]],
+        ["ZPI_cfg_tourFiringPerScene", 0]
+    ]],
+    ["negatives", createHashMapFromArray [
+        ["ZPI_cfg_tourScenes", [28, 28, 28, 9]],
+        ["ZPI_cfg_tourShots", createHashMapFromArray [[28, 15], [9, 9]]],
+        ["ZPI_cfg_maxBuildings", 0],                 // no building in the picture: nothing gets a label
+        ["ZPI_cfg_tourExplosions", 0],
+        ["ZPI_cfg_tourFiringPerScene", 0]
+    ]]
+];
 
 // ---- bursts: the camera stays put and shoots every N seconds ------------------------------
 // Movement shows up between the pictures of one burst; then the camera moves on.
@@ -190,6 +262,20 @@ ZPI_negatives = createHashMapFromArray [
     ["people",  ["C_man_1","C_man_polo_1_F","C_man_polo_2_F","C_man_polo_4_F"]],
     ["cars",    ["C_Offroad_01_F","C_Hatchback_01_F","C_SUV_01_F","C_Van_01_transport_F","C_Truck_02_covered_F"]],
     ["wrecks",  ["Land_Wreck_T72_hull_F","Land_Wreck_BMP2_F","Land_Wreck_BRDM2_F","Land_Wreck_Truck_F","Land_Wreck_Car2_F","Land_Wreck_HMMWV_F"]]
+];
+
+// Clutter for the background pictures (Shift+', "negatives" stage): [kind, classes]; missing classes are skipped.
+ZPI_clutterProps = [
+    ["log",    ["Land_WoodenLog_F", "Land_TimberPile_01_F", "Land_WoodPile_F", "Land_WoodPile_large_F", "Land_Timbers_F"]],
+    ["rock",   ["Land_BluntStone_01", "Land_BluntStone_02", "Land_SharpStone_01", "Land_SharpStone_02", "Land_W_sharpStone_01",
+                "Land_W_sharpStone_02", "Land_BluntRock_apart", "Land_SharpRock_apart"]],
+    ["rubble", ["Land_GarbageHeap_01_F", "Land_GarbageHeap_02_F", "Land_GarbageHeap_03_F", "Land_GarbageHeap_04_F", "Land_JunkPile_F",
+                "Land_Tyres_F", "Land_Pallets_F", "Land_Bricks_V1_F", "Land_Bricks_V2_F", "Land_Cinderblocks_F", "Land_ConcretePipe_F",
+                "Land_GarbageBags_F", "Land_Garbage_square5_F"]],
+    ["wreck",  ["Land_Wreck_Car_F", "Land_Wreck_Car2_F", "Land_Wreck_Car3_F", "Land_Wreck_CarDismantled_F", "Land_Wreck_Truck_F",
+                "Land_Wreck_Truck_dropside_F", "Land_Wreck_Van_F", "Land_Wreck_Offroad_F", "Land_Wreck_Offroad2_F", "Land_Wreck_Skodovka_F",
+                "Land_Wreck_Ural_F", "Land_Wreck_UAZ_F", "Land_Wreck_BMP2_F", "Land_Wreck_BRDM2_F", "Land_Wreck_T72_hull_F"]],
+    ["car",    ["C_Offroad_01_F", "C_Hatchback_01_F", "C_SUV_01_F", "C_Van_01_transport_F", "C_Truck_02_covered_F", "C_Quadbike_01_F"]]
 ];
 
 // Explosion ammo for the barrage key (first existing class wins).

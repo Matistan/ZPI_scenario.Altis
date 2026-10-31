@@ -593,13 +593,13 @@ ZPI_fnc_doCapture = {
             mapGridPosition [ZPI_laserPos select 0, ZPI_laserPos select 1], ZPI_laserObj]
     } else { "null" };
     private _ref = if (ZPI_camLock && {ZPI_refImage != ""}) then { ZPI_refImage } else { "" };
-    ["shotx", format ['{"image":"%1","scene":"%2","seed":%3,"region":%4,"world":"%5","laser":%6,"time_label":"%7","daytime":%8,"weather":"%9","scale_lock":%10,"target_gsd":%11,"ref_image":"%12","occupancy":%13,"burst":%14,"burst_idx":%15,"burst_len":%16,"surface":"%17","fog":%18,"overcast":%19,"aperture":%20}',
+    ["shotx", format ['{"image":"%1","scene":"%2","seed":%3,"region":%4,"world":"%5","laser":%6,"time_label":"%7","daytime":%8,"weather":"%9","scale_lock":%10,"target_gsd":%11,"ref_image":"%12","occupancy":%13,"burst":%14,"burst_idx":%15,"burst_len":%16,"surface":"%17","fog":%18,"overcast":%19,"aperture":%20,"stage":"%21"}',
         _jsonName, ZPI_sceneName, ZPI_cfg_seed, ZPI_regionId, worldName, _laser,
         (ZPI_timePresets select ZPI_timeIndex) select 2, dayTime toFixed 3, (ZPI_weatherPresets select ZPI_weatherIndex) select 0,
         ZPI_scaleLock, ZPI_targetGSD toFixed 4, _ref, call ZPI_fnc_occupancyJson,
         [-1, ZPI_burstId] select (ZPI_burstIdx >= 0), ZPI_burstIdx, ZPI_burstLen,
         if (ZPI_laserRange > 0) then { surfaceType ZPI_laserPos } else { "" },
-        str fogParams, overcast toFixed 3, apertureParams select 0]] call ZPI_fnc_emit;
+        str fogParams, overcast toFixed 3, apertureParams select 0, ZPI_tourStage]] call ZPI_fnc_emit;
 
     [_jsonName, _basis, _th, _tv] call ZPI_fnc_logTerrain;   // DEM patch under the view
     [_jsonName, _basis, _th, _tv] call ZPI_fnc_logRays;      // what each of 9 x 5 image points really hits

@@ -140,7 +140,9 @@ ZPI_fnc_tourExplosion = {
     };
     if (!_ok || {ZPI_tourStop}) exitWith {};
     private _ammo = ([ZPI_cfg_barrageAmmo, "CfgAmmo"] call ZPI_fnc_validClasses) param [0, "Sh_82mm_AMOS"];
-    if ([_p] call ZPI_fnc_takeRef) then { sleep 0.15 };
+    private _ref = "";
+    if ([_p] call ZPI_fnc_takeRef) then { _ref = ZPI_refImage; sleep 0.15 };
+    private _before = ZPI_shotCount;
     ZPI_expId = ZPI_expId + 1;
     private _sh = createVehicle [_ammo, [_p select 0, _p select 1, 60], [], 0, "CAN_COLLIDE"];
     _sh setVariable ["ZPI_id", ZPI_expId];
@@ -152,7 +154,26 @@ ZPI_fnc_tourExplosion = {
         [_pos, _projectile getVariable ["ZPI_expSize", ZPI_cfg_expMedium], _projectile getVariable ["ZPI_id", -1]] call ZPI_fnc_addExplosion;
     }];
     _sh setVelocity [0, 0, -150];
-    sleep 2;
+    // the explosion triggers the first picture by itself (0.35 s after it); more pictures of the same
+    // explosion (ZPI_cfg_tourExplosionFrames) from the unchanged view, with the same reference picture
+    private _t0 = time;
+    waitUntil { sleep 0.05; ZPI_shotCount > _before || {time > _t0 + 4} };
+    if (ZPI_cfg_tourExplosionFrames > 1 && {ZPI_shotCount > _before} && {_ref != ""}) then {
+        private _t1 = time;
+        for "_k" from 2 to ZPI_cfg_tourExplosionFrames do {
+            if (ZPI_tourStop) exitWith {};
+            waitUntil { ZPI_capState == 0 };
+            waitUntil { time >= _t1 + 0.95 * (_k - 1) };
+            ZPI_refImage = _ref;
+            ZPI_camLock = true;
+            ZPI_fovLock = true;
+            ZPI_refUntil = time + 3;
+            private _b2 = ZPI_shotCount;
+            call ZPI_fnc_startCapture;
+            waitUntil { sleep 0.05; (ZPI_capState == 0 && {ZPI_shotCount > _b2}) || {time > _t1 + 6} };
+        };
+    };
+    sleep 1;
     call ZPI_fnc_tourWaitIdle;
 };
 
@@ -264,7 +285,7 @@ ZPI_fnc_tourScene = {
 
     switch (true) do {
         // ---- driving columns (road convoy, tank column, tank column across fields)
-        case (_scene in [4, 11, 17, 19]): {
+        case (_scene in [4, 11, 17, 19, 26]): {
             sleep 10;                                           // let the column get going
             while { call _more } do {
                 private _v = call _vehs;
@@ -331,7 +352,7 @@ ZPI_fnc_tourScene = {
         case (_scene == 18): {
             sleep 3;
             while { call _more } do {
-                private _k = [call _vehs, 1] call ZPI_fnc_tourFiring;
+                private _k = [call _vehs, ZPI_cfg_tourFiringExtra] call ZPI_fnc_tourFiring;
                 if (_k < 0) exitWith {};
                 if (_k == 0) then { _fails = _fails + 1 };
             };
@@ -351,6 +372,18 @@ ZPI_fnc_tourScene = {
                     _grp select { (_x distance2D _u) < 5 }
                 } else { _grp };
                 [_tgt, _soldierGSD, [ZPI_cfg_burstShotsStatic] call _len, _view] call _shoot;
+                _i = _i + 1;
+            };
+        };
+        // ---- clutter, no targets (background pictures): the props, bushes and small trees in turn,
+        //      half at the soldier zoom, half at the far zoom; no building in the picture
+        case (_scene == 28): {
+            sleep 2;
+            while { call _more } do {
+                if (ZPI_clutterPoints isEqualTo []) exitWith {};
+                private _far = _i % 2 == 1;
+                [selectRandom ZPI_clutterPoints, [ZPI_cfg_tourSoldierGSD, ZPI_cfg_tourFarGSD] select _far, [ZPI_cfg_burstShotsStatic] call _len,
+                    [[ZPI_cfg_tourDist, [300, 700]] select _far, [ZPI_cfg_tourElevSoldier, ZPI_cfg_tourElev] select _far], 0] call _shoot;
                 _i = _i + 1;
             };
         };
@@ -376,18 +409,18 @@ ZPI_fnc_tourScene = {
     };
 
     // tanks in a static scene also fire (labelled "tank_fire"), not in driving columns
-    if (ZPI_cfg_tourFiringPerScene > 0 && {!(_scene in [4, 11, 17, 18, 19, 9, 10, 13, 14, 15, 16, 22])} && {!(call ZPI_fnc_tourDone)}) then {
+    if (ZPI_cfg_tourFiringPerScene > 0 && {!(_scene in [4, 11, 17, 18, 19, 26, 28, 9, 10, 13, 14, 15, 16, 22])} && {!(call ZPI_fnc_tourDone)}) then {
         private _tanks = ["tracked_vehicle"] call ZPI_fnc_tourObjs;
         if (_tanks isNotEqualTo []) then {
             for "_e" from 1 to ZPI_cfg_tourFiringPerScene do {
                 if (call ZPI_fnc_tourDone) exitWith {};
-                if (([_tanks, 1] call ZPI_fnc_tourFiring) < 0) exitWith {};
+                if (([_tanks, ZPI_cfg_tourFiringExtra] call ZPI_fnc_tourFiring) < 0) exitWith {};
             };
         };
     };
 
     // one explosion picture (not in the negatives, building scenes or tank firing)
-    if (ZPI_cfg_tourExplosions > 0 && {!(_scene in [9, 10, 13, 14, 15, 16, 18, 22])} && {!(call ZPI_fnc_tourDone)}) then {
+    if (ZPI_cfg_tourExplosions > 0 && {!(_scene in [9, 10, 13, 14, 15, 16, 18, 22, 28])} && {!(call ZPI_fnc_tourDone)}) then {
         private _a = call _all;
         if (_a isNotEqualTo []) then {
             for "_e" from 1 to ZPI_cfg_tourExplosions do {
@@ -400,29 +433,11 @@ ZPI_fnc_tourScene = {
 };
 
 // ---- the generator ---------------------------------------------------------------------
-ZPI_fnc_tourDataset = {
-    params [["_target", ZPI_cfg_tourTarget]];
-    if (ZPI_tourRunning) exitWith { ["Generator already running"] call ZPI_fnc_msg };
-    ZPI_tourRunning = true;
-    ZPI_tourStop = false;
-    ZPI_tourTarget = _target;
-    ZPI_tourStart = ZPI_shotCount;
-    ZPI_autoCapture = false;
-    ZPI_firefight = false;
-    // Layout seeds never repeat between runs: every run continues where the last run on this PC
-    // stopped (kept in the Arma profile, saved after every scene, so also after a crash).
-    // Runs before this version used seeds below 1000.
-    ZPI_cfg_seed = (profileNamespace getVariable ["ZPI_nextTourSeed", 1000]) max 1000;
-    if (ZPI_cfg_seed > 16000) then { ZPI_cfg_seed = 1000 };          // seeds stay exact in 32-bit floats
-    ["tour_start", format ['{"target":%1,"burst":%2,"interval":%3,"max_buildings":%4,"first_seed":%5}',
-        _target, ZPI_cfg_burstShots, ZPI_cfg_burstInterval, ZPI_cfg_maxBuildings, ZPI_cfg_seed]] call ZPI_fnc_event;
-    [format [
-        "Dataset generator: %1 images, weather: %2, time: %3, aperture %4 (Home stops)", _target,
-        (ZPI_weatherPresets select ZPI_cfg_tourWeather) select 0, (ZPI_timePresets select ZPI_cfg_tourTime) select 3, apertureParams select 0
-    ]] call ZPI_fnc_msg;
+// Rounds over all location markers, shuffled scene list each time, until ZPI_tourTarget pictures
+// (counted from ZPI_tourStart) are taken or Home is pressed.
+ZPI_fnc_tourRounds = {
     private _locs = [];
     for "_l" from 0 to ((count ZPI_locations) - 1) do { _locs pushBack _l };
-
     private _firstRound = true;
     while { !(call ZPI_fnc_tourDone) } do {
         private _cycleStart = ZPI_shotCount;
@@ -431,9 +446,10 @@ ZPI_fnc_tourDataset = {
             private _loc = _x;
             private _anchor = ZPI_locations select _loc;
             ZPI_regionId = _loc;
-            // shuffled scenes; the very first scene of a run is the tank-firing one, so even a short test has it
+            // shuffled scenes; the very first scene of a normal run is the tank-firing one, so even a short test has it
             private _order = ZPI_cfg_tourScenes call BIS_fnc_arrayShuffle;
-            if (_firstRound && {18 in _order}) then { _order = [18] + (_order - [18]); _firstRound = false };
+            if (_firstRound && {ZPI_tourStage == ""} && {18 in _order}) then { _order = [18] + (_order - [18]) };
+            _firstRound = false;
             {
                 if (call ZPI_fnc_tourDone) exitWith {};
                 ZPI_timeIndex = ZPI_cfg_tourTime;       call ZPI_fnc_applyTime;
@@ -451,17 +467,74 @@ ZPI_fnc_tourDataset = {
                     [_x] call ZPI_fnc_runScene;
                     if (ZPI_entities isNotEqualTo []) then { [_x] call ZPI_fnc_tourScene };
                 };
-                [format ["Dataset: %1 / %2 images", ZPI_shotCount - ZPI_tourStart, ZPI_tourTarget]] call ZPI_fnc_msg;
+                [format ["Dataset%1: %2 / %3 images (run total %4)", ["", " stage '" + ZPI_tourStage + "'"] select (ZPI_tourStage != ""),
+                    ZPI_shotCount - ZPI_tourStart, ZPI_tourTarget, ZPI_shotCount - ZPI_tourRunStart]] call ZPI_fnc_msg;
             } forEach _order;
         } forEach _locs;
         if (ZPI_shotCount == _cycleStart && {!ZPI_tourStop}) exitWith {
             ["Generator: a whole round gave no images (no green, uncluttered sites?). Raise ZPI_cfg_maxBuildings or ZPI_cfg_siteRadius in config.sqf"] call ZPI_fnc_msg;
         };
     };
+};
+
+// Home. With a plan (ZPI_cfg_tourPlan) the stages run one after another, each with its profile's
+// settings (ZPI_tourProfiles) and its own number of pictures; without a plan: ZPI_cfg_tourTarget
+// pictures of the normal scene list.
+ZPI_tourStage = "";
+ZPI_fnc_tourDataset = {
+    params [["_target", -1]];
+    if (ZPI_tourRunning) exitWith { ["Generator already running"] call ZPI_fnc_msg };
+    ZPI_tourRunning = true;
+    ZPI_tourStop = false;
+    ZPI_autoCapture = false;
+    ZPI_firefight = false;
+    ZPI_tourRunStart = ZPI_shotCount;
+    private _plan = if (_target > 0 || {ZPI_cfg_tourPlan isEqualTo []}) then {
+        [["", [ZPI_cfg_tourTarget, _target] select (_target > 0)]]
+    } else { ZPI_cfg_tourPlan };
+    private _total = 0;
+    { _total = _total + (_x select 1) } forEach _plan;
+    // Layout seeds never repeat between runs: every run continues where the last run on this PC
+    // stopped (kept in the Arma profile, saved after every scene, so also after a crash).
+    // Runs before this version used seeds below 1000.
+    ZPI_cfg_seed = (profileNamespace getVariable ["ZPI_nextTourSeed", 1000]) max 1000;
+    if (ZPI_cfg_seed > 16000) then { ZPI_cfg_seed = 1000 };          // seeds stay exact in 32-bit floats
+    ["tour_start", format ['{"target":%1,"burst":%2,"interval":%3,"max_buildings":%4,"first_seed":%5,"plan":%6}',
+        _total, ZPI_cfg_burstShots, ZPI_cfg_burstInterval, ZPI_cfg_maxBuildings, ZPI_cfg_seed,
+        str (_plan apply { [_x select 0, _x select 1] })]] call ZPI_fnc_event;
+    [format [
+        "Dataset generator: %1 images in %5 stage(s), weather: %2, time: %3, aperture %4 (Home stops)", _total,
+        (ZPI_weatherPresets select ZPI_cfg_tourWeather) select 0, (ZPI_timePresets select ZPI_cfg_tourTime) select 3, apertureParams select 0, count _plan
+    ]] call ZPI_fnc_msg;
+
+    // every setting a profile can change, saved so each stage starts from the normal values
+    private _saved = createHashMap;
+    {
+        _x params ["_prof"];
+        { if !(_x in _saved) then { _saved set [_x, missionNamespace getVariable _x] } } forEach (keys (ZPI_tourProfiles getOrDefault [_prof, createHashMap]));
+    } forEach _plan;
+    {
+        _x params ["_prof", "_frames"];
+        if (ZPI_tourStop) exitWith {};
+        { missionNamespace setVariable [_x, _y] } forEach _saved;
+        if (_prof != "" && {!(_prof in ZPI_tourProfiles)}) then {
+            [format ["Generator: no profile '%1' in ZPI_tourProfiles (config.sqf), stage uses the normal settings", _prof]] call ZPI_fnc_msg;
+        };
+        { missionNamespace setVariable [_x, _y] } forEach (ZPI_tourProfiles getOrDefault [_prof, createHashMap]);
+        ZPI_tourStage = _prof;
+        ZPI_tourTarget = _frames;
+        ZPI_tourStart = ZPI_shotCount;
+        ["tour_stage", format ['{"stage":"%1","index":%2,"target":%3}', _prof, _forEachIndex, _frames]] call ZPI_fnc_event;
+        if (_prof != "") then { [format ["Stage %1 / %2: '%3', %4 images", _forEachIndex + 1, count _plan, _prof, _frames]] call ZPI_fnc_msg };
+        call ZPI_fnc_tourRounds;
+        ["tour_stage_end", format ['{"stage":"%1","shots":%2}', _prof, ZPI_shotCount - ZPI_tourStart]] call ZPI_fnc_event;
+    } forEach _plan;
+    { missionNamespace setVariable [_x, _y] } forEach _saved;
+    ZPI_tourStage = "";
     ZPI_targetGSD = ZPI_cfg_targetGSD;
     ZPI_fovLock = false;
     ZPI_burstIdx = -1;
     ZPI_tourRunning = false;
-    ["tour_end", format ['{"shots":%1,"stopped":%2}', ZPI_shotCount - ZPI_tourStart, ZPI_tourStop]] call ZPI_fnc_event;
-    [format ["Dataset generator finished: %1 images. Run tools/make_yolo_dataset.py", ZPI_shotCount - ZPI_tourStart]] call ZPI_fnc_msg;
+    ["tour_end", format ['{"shots":%1,"stopped":%2}', ZPI_shotCount - ZPI_tourRunStart, ZPI_tourStop]] call ZPI_fnc_event;
+    [format ["Dataset generator finished: %1 images. Run tools/make_yolo_dataset.py", ZPI_shotCount - ZPI_tourRunStart]] call ZPI_fnc_msg;
 };

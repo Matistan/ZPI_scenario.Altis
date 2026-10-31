@@ -168,8 +168,8 @@ ZPI_fnc_tourSite = {
                 _what = (_b apply { typeOf _x }) joinString "+";
             };
         };
-        case (_scene in [1, 2, 4, 9, 11, 19, 21]): {
-            private _r = [_anchor, _R, switch (true) do { case (_scene == 19): { 8 }; case (_scene in [4, 11, 21]): { 6 }; default { 0 } }] call ZPI_fnc_siteRoad;
+        case (_scene in [1, 2, 4, 9, 11, 19, 21, 26]): {
+            private _r = [_anchor, _R, switch (true) do { case (_scene == 19): { 8 }; case (_scene in [4, 11, 21, 26]): { 6 }; default { 0 } }] call ZPI_fnc_siteRoad;
             if (_r isNotEqualTo []) then { (selectRandom _r) params ["_g", "_p"]; _site = _p; _what = "road" };
         };
         default {
